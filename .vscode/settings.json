@@ -1,0 +1,8 @@
+{
+    "EIDE.SerialPortMonitor.BaudRate": 115200,
+    "files.associations": {
+        "*.tcc": "cpp",
+        "ostream": "cpp"
+    },
+    "cmake.sourceDirectory": "D:/develop/esp32/ESP32-WROOM-32E/ESP32_BED_FW/.pio/libdeps/upesy_wroom/Unity"
+}
