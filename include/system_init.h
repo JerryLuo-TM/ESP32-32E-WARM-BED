@@ -27,6 +27,13 @@
 #define ROTARY_ENCODER_VCC_PIN     -1
 #define ROTARY_ENCODER_STEPS        2  //try 1,2 or 4 to get expected behaviour
 
+#define HOT_MODE_STANDBY        0
+#define HOT_MODE_PRE_HEAT       1
+#define HOT_MODE_KEEP_WARM      2
+#define HOT_MODE_WELD           3
+#define HOT_MODE_COLD           4
+#define HOT_MODE_MAX            5
+
 typedef struct {
     float voltage;
     float current;
@@ -40,12 +47,14 @@ typedef struct {
     uint32_t last_encoder;
     uint32_t last_target_temputer;
     float last_pwm_precent;
+    uint32_t last_holt_mode;
     /* current value */
     ina226_t ina226;
     float temputer;
     uint32_t encoder;
     uint32_t target_temputer;
     float pwm_precent;
+    uint32_t holt_mode;
 } __attribute__ ((packed)) system_info_t;
 
 extern system_info_t system_info;

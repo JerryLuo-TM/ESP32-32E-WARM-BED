@@ -32,6 +32,7 @@ void parameter_init(void)
     system_info.last_target_temputer = -1;
 	system_info.last_encoder = 1;
 	system_info.last_pwm_precent = 1.0f;
+	system_info.last_holt_mode = HOT_MODE_MAX;
 
 	system_info.temputer = 0;
 	system_info.ina226.voltage = 0;
@@ -40,7 +41,9 @@ void parameter_init(void)
     system_info.target_temputer = 0;
 	system_info.encoder = 0;
 	system_info.pwm_precent = 0.0f;
+	system_info.holt_mode = HOT_MODE_STANDBY;
 
+	/* origin target temputer */
     system_info.target_temputer = 65;
 }
 

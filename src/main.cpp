@@ -224,9 +224,6 @@ void gui_reflow_solder_mode_init(void)
 
     tft.fillScreen(TFT_BLACK);
 
-	// tft.drawFastHLine(0, 120, 240, TFT_RED);
-	// tft.drawFastVLine(120, 0, 240, TFT_RED);
-
 	tft.setTextDatum(TL_DATUM);/* 左顶 */
 	tft.loadFont(hwkt_32);
 	tft.setTextColor(TFT_GOLD, TFT_BLACK, true);
@@ -234,49 +231,171 @@ void gui_reflow_solder_mode_init(void)
 	tft.println("回 流 焊 模 式");
 	tft.unloadFont();
 
-	sx = 30; sy = 210; len = tft.width() - sx;
-	tft.drawFastHLine(sx, sy, len, TFT_RED);
-	tft.drawFastVLine(40, 40, 240, TFT_RED);
+	// sx = 30; sy = 210; len = tft.width() - sx;
+	// tft.drawFastHLine(sx, sy, len, TFT_RED);
+	// tft.drawFastVLine(40, 40, 240, TFT_RED);
 
-	sx = 40; sy = 210;
-	ex = sx + (float)(160 - 25) / 1.2f * CELL_TIME;
-	ey = sy - (float)(160 - 25) * CELL_TEMP;
-	tft.drawLine(sx, sy, ex, ey, TFT_GREEN);
+	// sx = 40; sy = 210;
+	// ex = sx + (float)(160 - 25) / 1.2f * CELL_TIME;
+	// ey = sy - (float)(160 - 25) * CELL_TEMP;
+	// tft.drawLine(sx, sy, ex, ey, TFT_GREEN);
 
-	sx = ex; sy = ey;
-	ex = sx + (float)(180 - 160) / 0.4f * CELL_TIME;
-	ey = sy - (float)(180 - 160) * CELL_TEMP;
-	tft.drawLine(sx, sy, ex, ey, TFT_BLUE);
+	// sx = ex; sy = ey;
+	// ex = sx + (float)(180 - 160) / 0.4f * CELL_TIME;
+	// ey = sy - (float)(180 - 160) * CELL_TEMP;
+	// tft.drawLine(sx, sy, ex, ey, TFT_BLUE);
 
-	sx = ex; sy = ey;
-	ex = sx + (float)(217 - 180) / 3.0f * CELL_TIME;
-	ey = sy - (float)(217 - 180) * CELL_TEMP;
-	tft.drawLine(sx, sy, ex, ey, TFT_RED);
+	// sx = ex; sy = ey;
+	// ex = sx + (float)(217 - 180) / 3.0f * CELL_TIME;
+	// ey = sy - (float)(217 - 180) * CELL_TEMP;
+	// tft.drawLine(sx, sy, ex, ey, TFT_RED);
 
-	sx = ex; sy = ey;
-	ex = sx + (float)(240 - 217) / 0.75f * CELL_TIME;
-	ey = sy - (float)(240 - 217) * CELL_TEMP;
-	tft.drawLine(sx, sy, ex, ey, TFT_WHITE);
+	// sx = ex; sy = ey;
+	// ex = sx + (float)(240 - 217) / 0.75f * CELL_TIME;
+	// ey = sy - (float)(240 - 217) * CELL_TEMP;
+	// tft.drawLine(sx, sy, ex, ey, TFT_WHITE);
 
-	sx = ex; sy = ey;
-	ex = 240-1;
-	ey = 210;
-	tft.drawLine(sx, sy, ex, ey, TFT_WHITE);
+	// sx = ex; sy = ey;
+	// ex = 240-1;
+	// ey = 210;
+	// tft.drawLine(sx, sy, ex, ey, TFT_WHITE);
 
-	// tft.loadFont(hwkt_24);
-	// tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
-	// tft.setCursor(1, 50);  tft.println("当前");
-	// tft.setCursor(1, 80);  tft.println("温度");
-	// tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
-	// tft.setCursor(1, 122); tft.println("设定");
-	// tft.setCursor(1, 152); tft.println("温度");
-	// tft.setTextColor(TFT_ORANGE, TFT_BLACK, true);
-	// tft.setCursor(1, 186); tft.println("电压");
-	// tft.setCursor(1, 214); tft.println("电流");
-	// tft.setTextColor(TFT_ORANGE, TFT_BLACK, true);
-	// tft.setCursor(124, 186); tft.println("功率");
-	// tft.setCursor(124, 214); tft.println("输出");
-	// tft.unloadFont();
+	tft.drawFastHLine(0, 180 - 6, 240, TFT_DARKGREY);
+	tft.drawFastHLine(0, 180 - 5, 240, TFT_DARKGREY);
+	tft.drawFastHLine(0, 180 - 4, 240, TFT_DARKGREY);
+	tft.loadFont(hwkt_24);
+	tft.setTextColor(TFT_GREEN, TFT_BLACK, true);
+	tft.setCursor(1, 183);	tft.println("电压");
+	tft.setTextColor(TFT_VIOLET, TFT_BLACK, true);
+	tft.setCursor(1, 183 + 30);	tft.println("功率");
+
+	tft.setTextColor(TFT_CYAN, TFT_BLACK, true);
+	tft.setCursor(130 + 1, 183);	tft.println("温度");
+	tft.setTextColor(TFT_ORANGE, TFT_BLACK, true);
+	tft.setCursor(130 + 1, 183 + 30);	tft.println("状态"); // 状态 [ 待机 预热 恒温 回流 降温]
+	tft.unloadFont();
+}
+
+void gui_reflow_solder_mode_refresh(void)
+{
+	char buf[50];
+
+	update_encoder_key();
+
+	/* 旋转编码器 处理 */
+	if (system_info.last_encoder != system_info.encoder) {
+		if (system_info.last_encoder < system_info.encoder) {
+			system_info.holt_mode += 1;
+		} else if (system_info.last_encoder > system_info.encoder) {
+			system_info.holt_mode -= 1;
+		}
+
+		if (system_info.holt_mode >= HOT_MODE_MAX) {
+			system_info.holt_mode = 0;
+		}
+	}
+
+	/* 电压 */
+	if (system_info.last_ina226.voltage != system_info.ina226.voltage) {
+		tft.setTextColor(TFT_GREEN, TFT_BLACK, true);
+		tft.setTextDatum(TR_DATUM);/* 右上 */
+		tft.loadFont(fzchsjt_24);
+		sprintf(&buf[0], " ");
+		if ((int32_t)system_info.ina226.voltage > 9) {
+			sprintf(&buf[1], "%01d", (int32_t)(system_info.ina226.voltage)/10%10);
+			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.voltage)%10);
+		} else {
+			sprintf(&buf[1], " ");
+			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.voltage)%10);
+		}
+		sprintf(&buf[3], ".");
+		sprintf(&buf[4], "%01d", (int32_t)(system_info.ina226.voltage*10.0)%10);
+		buf[5] = 'V';
+		buf[6] = '\0';
+		tft.drawString(buf, 126, 183);
+		tft.unloadFont();
+	}
+
+	/* 功率 */
+	if (system_info.last_ina226.power != system_info.ina226.power) {
+		tft.setTextColor(TFT_VIOLET, TFT_BLACK, true);
+		tft.setTextDatum(TR_DATUM);/* 右上 */
+		tft.loadFont(fzchsjt_24);
+		sprintf(&buf[0], " ");
+		if ((int32_t)system_info.ina226.power > 99) {
+			sprintf(&buf[1], "%01d", (int32_t)(system_info.ina226.power)/100%10);
+			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.power)/10%10);
+			sprintf(&buf[3], "%01d", (int32_t)(system_info.ina226.power)%10);
+		} else if ((int32_t)system_info.ina226.power > 9) {
+			sprintf(&buf[1], " ");
+			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.power)/10%10);
+			sprintf(&buf[3], "%01d", (int32_t)(system_info.ina226.power)%10);
+		} else {
+			sprintf(&buf[1], " ");
+			sprintf(&buf[2], " ");
+			sprintf(&buf[3], "%01d", (int32_t)(system_info.ina226.power)%10);
+		}
+		buf[4] = 'W';
+		buf[5] = '\0';
+		tft.drawString(buf, 126, 183 + 30);
+		tft.unloadFont();
+	}
+
+	/* 温度 */
+	if (system_info.last_temputer != system_info.temputer) {
+		tft.setTextColor(TFT_CYAN, TFT_BLACK, true);
+		tft.setTextDatum(TR_DATUM);/* 右上 */
+		tft.loadFont(fzchsjt_24);
+		sprintf(&buf[0], " ");
+		if ((int32_t)system_info.temputer > 99) {
+			sprintf(&buf[1], "%01d", (int32_t)(system_info.temputer)/100%10);
+			sprintf(&buf[2], "%01d", (int32_t)(system_info.temputer)/10%10);
+			sprintf(&buf[3], "%01d", (int32_t)(system_info.temputer)%10);
+		} else if ((int32_t)system_info.temputer > 9) {
+			sprintf(&buf[1], " ");
+			sprintf(&buf[2], "%01d", (int32_t)(system_info.temputer)/10%10);
+			sprintf(&buf[3], "%01d", (int32_t)(system_info.temputer)%10);
+		} else {
+			sprintf(&buf[1], " ");
+			sprintf(&buf[2], " ");
+			sprintf(&buf[3], "%01d", (int32_t)(system_info.temputer)%10);
+		}
+		// sprintf(&buf[4], "℃");
+		sprintf(&buf[4], "C");
+		tft.drawString(buf, 236, 183);
+		tft.unloadFont();
+	}
+
+	/* 状态 */
+	if (system_info.last_holt_mode != system_info.holt_mode) {
+		tft.loadFont(hwkt_24);
+		if (system_info.holt_mode == HOT_MODE_STANDBY) {
+			tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
+			tft.setCursor(190, 183 + 30);	tft.println("待机");
+		} else if (system_info.holt_mode == HOT_MODE_PRE_HEAT) {
+			tft.setTextColor(TFT_YELLOW, TFT_BLACK, true);
+			tft.setCursor(190, 183 + 30);	tft.println("预热");
+		} else if (system_info.holt_mode == HOT_MODE_KEEP_WARM) {
+			tft.setTextColor(TFT_ORANGE, TFT_BLACK, true);
+			tft.setCursor(190, 183 + 30);	tft.println("恒温");
+		} else if (system_info.holt_mode == HOT_MODE_WELD) {
+			tft.setTextColor(TFT_RED, TFT_BLACK, true);
+			tft.setCursor(190, 183 + 30);	tft.println("回流");
+		} else if (system_info.holt_mode == HOT_MODE_COLD) {
+			tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK, true);
+			tft.setCursor(190, 183 + 30);	tft.println("降温");
+		} else {
+			tft.setTextColor(TFT_MAGENTA, TFT_BLACK, true);
+			tft.setCursor(190, 183 + 30);	tft.println("错误");
+		}
+		tft.unloadFont();
+	}
+
+	system_info.last_temputer = system_info.temputer;
+	system_info.last_ina226.voltage = system_info.ina226.voltage;
+	system_info.last_ina226.power = system_info.ina226.power;
+	system_info.last_encoder = system_info.encoder;
+	system_info.last_holt_mode = system_info.holt_mode;
 }
 
 /* 10Hz */
@@ -293,7 +412,7 @@ void Task_Data_Callback()
 /* 50Hz */
 void Task_GUI_Callback()
 {
-	static uint32_t gui_page_select = 1;
+	static uint32_t gui_page_select = 2;
 	static uint32_t gui_page_current = 0;
 
 	if (gui_page_select == 1) {
@@ -309,7 +428,7 @@ void Task_GUI_Callback()
 	if (gui_page_current == 1) {
 		gui_thermost_mode_refresh();
 	} else if (gui_page_current == 2) {
-		// gui_reflow_solder_mode_refresh();
+		gui_reflow_solder_mode_refresh();
 	}
 }
 
