@@ -60,6 +60,8 @@ typedef struct {
 extern system_info_t system_info;
 extern TFT_eSPI tft;
 
+extern bool g_key_is_press;
+
 void parameter_init(void);
 void pwm_init(void);
 void max6675_init(void);

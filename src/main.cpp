@@ -72,7 +72,7 @@ void gui_thermost_mode_init(void)
 	tft.unloadFont();
 }
 
-double Kp = 10,Ki = 0.001, Kd = 10;
+double Kp = 5.0, Ki = 0.001, Kd = 1.0;
 double last_value = 0, value = 0;
 double error_Temp = 0, Output_Heat = 0;
 double dt = 0.02;
@@ -117,10 +117,10 @@ void gui_thermost_mode_refresh(void)
 				// system_info.pwm_precent -= 1.0f;
 			}
 		}
-		if (system_info.target_temputer > 230) {system_info.target_temputer = 230;} 
+		if (system_info.target_temputer > 230) {system_info.target_temputer = 230;}
 		else if (system_info.target_temputer < 20) {system_info.target_temputer = 20;}
 
-		// if (system_info.pwm_precent > 100.0f) {system_info.pwm_precent = 100.0f;} 
+		// if (system_info.pwm_precent > 100.0f) {system_info.pwm_precent = 100.0f;}
 		// else if (system_info.pwm_precent < 0.0f) {system_info.pwm_precent = 0.0f;}
 	}
 
@@ -213,11 +213,6 @@ void gui_thermost_mode_refresh(void)
 	system_info.last_pwm_precent = system_info.pwm_precent;
 }
 
-
-
-#define CELL_TEMP	(2.0f/3.0f)   //   160 / 240 ℃
-#define CELL_TIME	(200.0f/5.0f/60.0f)  //   25  / 60   S
-
 void gui_reflow_solder_mode_init(void)
 {
 	uint32_t sx, sy, ex, ey, len;
@@ -276,24 +271,116 @@ void gui_reflow_solder_mode_init(void)
 	tft.unloadFont();
 }
 
+bool g_key_is_press = false;
+bool g_weld_running = false;
+unsigned long g_weld_timestamp_start, g_weld_timestamp;
+
+uint32_t one_sec_count;
+
+//20ms
 void gui_reflow_solder_mode_refresh(void)
 {
 	char buf[50];
+	static unsigned long timestamps_start = 0, timestamps_seconds = 0;
+	int32_t post_x, post_y;
 
 	update_encoder_key();
 
 	/* 旋转编码器 处理 */
-	if (system_info.last_encoder != system_info.encoder) {
-		if (system_info.last_encoder < system_info.encoder) {
-			system_info.holt_mode += 1;
-		} else if (system_info.last_encoder > system_info.encoder) {
-			system_info.holt_mode -= 1;
+	// if (system_info.last_encoder != system_info.encoder) {
+	// 	if (system_info.last_encoder < system_info.encoder) {
+	// 		system_info.holt_mode += 1;
+	// 	} else if (system_info.last_encoder > system_info.encoder) {
+	// 		system_info.holt_mode -= 1;
+	// 	}
+
+	/* 旋转编码器按钮 处理 */
+	if (g_key_is_press == true) {
+		if ((g_weld_running == false)
+			&& (system_info.holt_mode == HOT_MODE_STANDBY)
+			&& (system_info.temputer < 100)) {
+			g_weld_running = true;
+			system_info.holt_mode = HOT_MODE_PRE_HEAT;
+			timestamps_start = millis();
+			g_weld_timestamp_start = timestamps_start;
+			tft.fillRect(0, 50, 240, 120, TFT_BLACK);
 		}
+		g_key_is_press = false;
+	}
+
+/*
+	预热 20℃ -> 150℃	50S     1 ~ 3  ℃/S
+	恒温 150℃			 90S     60 ~ 120 S
+	回流 150℃ -> 235℃	30S		1 ~ 3 ℃/S
+	降温 235℃ -> 20℃	50S		2 ~ 4 ℃/S
+*/
+
+	if (system_info.holt_mode == HOT_MODE_STANDBY) {
+		system_info.target_temputer = 20;
+	} else if (system_info.holt_mode == HOT_MODE_PRE_HEAT) {
+		timestamps_seconds = (millis() - timestamps_start) / 1000;
+		system_info.target_temputer += 2.5f;
+		if (system_info.target_temputer > 160) {system_info.target_temputer = 160;}
+		if ((system_info.temputer > 155) && (timestamps_seconds > 50)) {
+			system_info.holt_mode += 1;
+			timestamps_start = millis(); // update timestamps
+		}
+	} else if (system_info.holt_mode == HOT_MODE_KEEP_WARM) {
+		timestamps_seconds = (millis() - timestamps_start) / 1000;
+		system_info.target_temputer = 160;
+		if (timestamps_seconds > 90) {
+			system_info.holt_mode += 1;
+			timestamps_start = millis();
+		}
+	} else if (system_info.holt_mode == HOT_MODE_WELD) {
+		timestamps_seconds = (millis() - timestamps_start) / 1000;
+		system_info.target_temputer += 2.5f;
+		if (system_info.target_temputer > 235) {system_info.target_temputer = 235;}
+		if ((system_info.temputer > 230) && (timestamps_seconds > 30)) {
+			system_info.holt_mode += 1;
+			timestamps_start = millis(); // update timestamps
+		}
+	} else if (system_info.holt_mode == HOT_MODE_COLD) {
+		timestamps_seconds = (millis() - timestamps_start) / 1000;
+		system_info.target_temputer = 60;
+		if ((system_info.temputer <= 60) && (timestamps_seconds > 60)) {
+			g_weld_running = false;
+			system_info.holt_mode = HOT_MODE_STANDBY;
+		}
+	} else {
+		// error
+		system_info.target_temputer = 20;
+		Serial.printf("mode error %d", system_info.holt_mode);
+	}
 
 		if (system_info.holt_mode >= HOT_MODE_MAX) {
-			system_info.holt_mode = 0;
+			system_info.holt_mode = HOT_MODE_STANDBY;
+		}
+
+	/* 画点 */
+	if (g_weld_running == true) {
+		g_weld_timestamp = (millis() - g_weld_timestamp_start) / 1000;
+		if ((g_weld_timestamp % 1) == 0) {
+			post_x = g_weld_timestamp / 1;
+			post_y = (int32_t)(170.0f - ((float)(system_info.temputer) / 2.5f));
+			if (post_x >= 240) {post_x = 240;}
+			if (post_y <= 50)  {post_y = 50;}
+			tft.drawPixel(post_x, post_y, TFT_WHITE, 0xFF, TFT_BLACK);
 		}
 	}
+
+	//系统误差
+	value = (double)system_info.target_temputer -  (double)system_info.temputer;
+	last_value = value;
+	error_Temp += value * dt;
+	if (error_Temp > 500) {error_Temp = 500;}
+	if (error_Temp < 0.0) {error_Temp = 0.0;}
+	Output_Heat = Kp * value + /* Ki * error_Temp */ + Kd * (value - last_value);
+	// Serial.printf("pwm_out: %f", Output_Heat);
+	if (Output_Heat > 100) {Output_Heat = 100;}
+	if (Output_Heat < 0.0) {Output_Heat = 0.001;}
+	system_info.pwm_precent = (int32_t)Output_Heat;
+	// Serial.printf("system_info.pwm_precent: %f \r\n", system_info.pwm_precent);
 
 	/* 电压 */
 	if (system_info.last_ina226.voltage != system_info.ina226.voltage) {
@@ -327,12 +414,12 @@ void gui_reflow_solder_mode_refresh(void)
 			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.power)/10%10);
 			sprintf(&buf[3], "%01d", (int32_t)(system_info.ina226.power)%10);
 		} else if ((int32_t)system_info.ina226.power > 9) {
-			sprintf(&buf[1], " ");
+			sprintf(&buf[1], "0");
 			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.power)/10%10);
 			sprintf(&buf[3], "%01d", (int32_t)(system_info.ina226.power)%10);
 		} else {
-			sprintf(&buf[1], " ");
-			sprintf(&buf[2], " ");
+			sprintf(&buf[1], "0");
+			sprintf(&buf[2], "0");
 			sprintf(&buf[3], "%01d", (int32_t)(system_info.ina226.power)%10);
 		}
 		buf[4] = 'W';
@@ -361,7 +448,6 @@ void gui_reflow_solder_mode_refresh(void)
 			sprintf(&buf[3], "%01d", (int32_t)(system_info.temputer)%10);
 		}
 		// sprintf(&buf[4], "℃");
-		sprintf(&buf[4], "C");
 		tft.drawString(buf, 236, 183);
 		tft.unloadFont();
 	}
@@ -391,10 +477,28 @@ void gui_reflow_solder_mode_refresh(void)
 		tft.unloadFont();
 	}
 
+
+	/* 0.0 - 1.0 */
+	update_pwm_out(system_info.pwm_precent/100.0f);
+
+	/* 打印状态 */
+	one_sec_count += 1;
+	if (((one_sec_count % 50) == 0) && (system_info.holt_mode != HOT_MODE_STANDBY)) {
+		Serial.printf("x: %d  y: %d diff:%f pwm_pre:%f \r\n", post_x, post_y, value, system_info.pwm_precent);
+		Serial.printf("current mode: %d g_weld_timestamp:%d second: %d target_temp: %d \r\n",
+																				system_info.holt_mode,
+																				g_weld_timestamp,
+																				timestamps_seconds, 
+																				system_info.target_temputer);
+	}
+
 	system_info.last_temputer = system_info.temputer;
+    system_info.last_target_temputer = system_info.target_temputer;
 	system_info.last_ina226.voltage = system_info.ina226.voltage;
+	system_info.last_ina226.current = system_info.ina226.current;
 	system_info.last_ina226.power = system_info.ina226.power;
 	system_info.last_encoder = system_info.encoder;
+	system_info.last_pwm_precent = system_info.pwm_precent;
 	system_info.last_holt_mode = system_info.holt_mode;
 }
 
@@ -434,7 +538,7 @@ void Task_GUI_Callback()
 
 
 
-void loop() 
+void loop()
 {
 	runner.execute();
 }

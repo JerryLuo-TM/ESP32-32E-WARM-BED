@@ -124,6 +124,7 @@ void update_encoder_key(void)
 		if (millis() - lastTimePressed < 500) {
             return;
         }
+		g_key_is_press = true;
         Serial.print("button pressed ");
 	}
 }
