@@ -45,14 +45,14 @@ typedef struct {
     ina226_t last_ina226;
     float last_temputer;
     uint32_t last_encoder;
-    uint32_t last_target_temputer;
+    float last_target_temputer;
     float last_pwm_precent;
     uint32_t last_holt_mode;
     /* current value */
     ina226_t ina226;
     float temputer;
     uint32_t encoder;
-    uint32_t target_temputer;
+    float target_temputer;
     float pwm_precent;
     uint32_t holt_mode;
 } __attribute__ ((packed)) system_info_t;

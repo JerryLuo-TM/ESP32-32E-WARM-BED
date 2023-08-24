@@ -72,9 +72,9 @@ void gui_thermost_mode_init(void)
 	tft.unloadFont();
 }
 
-double Kp = 5.0, Ki = 0.001, Kd = 1.0;
+double Kp = 5.0, Kd = 1.0;
 double last_value = 0, value = 0;
-double error_Temp = 0, Output_Heat = 0;
+double Output_Heat = 0;
 double dt = 0.02;
 
 void gui_thermost_mode_refresh(void)
@@ -87,15 +87,12 @@ void gui_thermost_mode_refresh(void)
 	/* 温控部分 PID */
 	//系统误差
 	value = (float)system_info.target_temputer - system_info.temputer;
-	last_value = value;
-	error_Temp += value * dt;
-	if (error_Temp > 500) {error_Temp = 500;}
-	if (error_Temp < 0.0) {error_Temp = 0.0;}
-	Output_Heat = Kp * value + Ki * error_Temp + Kd * (value - last_value);
+	Output_Heat = Kp * value + Kd * (value - last_value);
 	Serial.printf("pwm_out: %f", Output_Heat);
 	if (Output_Heat > 100) {Output_Heat = 100;}
 	if (Output_Heat < 0.0) {Output_Heat = 0.001;}
 	system_info.pwm_precent = (int32_t)Output_Heat;
+	last_value = value;
 	Serial.printf("system_info.pwm_precent: %f \r\n", system_info.pwm_precent);
 
 	/* 旋转编码器 处理 */
@@ -309,7 +306,8 @@ void gui_reflow_solder_mode_refresh(void)
 	}
 
 /*
-	预热 20℃ -> 150℃	50S     1 ~ 3  ℃/S
+	中温 Sn64Bi35Ag1
+	预热 20℃ -> 140℃	50S     1 ~ 3  ℃/S
 	恒温 150℃			 90S     60 ~ 120 S
 	回流 150℃ -> 235℃	30S		1 ~ 3 ℃/S
 	降温 235℃ -> 20℃	50S		2 ~ 4 ℃/S
@@ -319,24 +317,26 @@ void gui_reflow_solder_mode_refresh(void)
 		system_info.target_temputer = 20;
 	} else if (system_info.holt_mode == HOT_MODE_PRE_HEAT) {
 		timestamps_seconds = (millis() - timestamps_start) / 1000;
-		system_info.target_temputer += 2.5f;
-		if (system_info.target_temputer > 160) {system_info.target_temputer = 160;}
-		if ((system_info.temputer > 155) && (timestamps_seconds > 50)) {
+		system_info.target_temputer += (2.0f * 0.02f);
+		if (system_info.target_temputer > 140) {system_info.target_temputer = 140;}
+		if ((system_info.temputer > 135) && (timestamps_seconds > 60)) {
 			system_info.holt_mode += 1;
 			timestamps_start = millis(); // update timestamps
 		}
 	} else if (system_info.holt_mode == HOT_MODE_KEEP_WARM) {
 		timestamps_seconds = (millis() - timestamps_start) / 1000;
-		system_info.target_temputer = 160;
-		if (timestamps_seconds > 90) {
+
+		system_info.target_temputer += (0.4f * 0.02f);
+		if (system_info.target_temputer > 160) {system_info.target_temputer = 160;}
+		if ((system_info.temputer > 155) && (timestamps_seconds > 60)) {
 			system_info.holt_mode += 1;
-			timestamps_start = millis();
+			timestamps_start = millis(); // update timestamps
 		}
 	} else if (system_info.holt_mode == HOT_MODE_WELD) {
 		timestamps_seconds = (millis() - timestamps_start) / 1000;
-		system_info.target_temputer += 2.5f;
-		if (system_info.target_temputer > 235) {system_info.target_temputer = 235;}
-		if ((system_info.temputer > 230) && (timestamps_seconds > 30)) {
+		system_info.target_temputer += (2.5f * 0.02f);
+		if (system_info.target_temputer > 225) {system_info.target_temputer = 225;}
+		if ((system_info.temputer > 215) && (timestamps_seconds > 30)) {
 			system_info.holt_mode += 1;
 			timestamps_start = millis(); // update timestamps
 		}
@@ -360,8 +360,8 @@ void gui_reflow_solder_mode_refresh(void)
 	/* 画点 */
 	if (g_weld_running == true) {
 		g_weld_timestamp = (millis() - g_weld_timestamp_start) / 1000;
-		if ((g_weld_timestamp % 1) == 0) {
-			post_x = g_weld_timestamp / 1;
+		if ((g_weld_timestamp % 2) == 0) {
+			post_x = g_weld_timestamp / 2;
 			post_y = (int32_t)(170.0f - ((float)(system_info.temputer) / 2.5f));
 			if (post_x >= 240) {post_x = 240;}
 			if (post_y <= 50)  {post_y = 50;}
@@ -371,16 +371,11 @@ void gui_reflow_solder_mode_refresh(void)
 
 	//系统误差
 	value = (double)system_info.target_temputer -  (double)system_info.temputer;
-	last_value = value;
-	error_Temp += value * dt;
-	if (error_Temp > 500) {error_Temp = 500;}
-	if (error_Temp < 0.0) {error_Temp = 0.0;}
-	Output_Heat = Kp * value + /* Ki * error_Temp */ + Kd * (value - last_value);
-	// Serial.printf("pwm_out: %f", Output_Heat);
+	Output_Heat = Kp * value + Kd * (value - last_value);
 	if (Output_Heat > 100) {Output_Heat = 100;}
 	if (Output_Heat < 0.0) {Output_Heat = 0.001;}
 	system_info.pwm_precent = (int32_t)Output_Heat;
-	// Serial.printf("system_info.pwm_precent: %f \r\n", system_info.pwm_precent);
+	last_value = value;
 
 	/* 电压 */
 	if (system_info.last_ina226.voltage != system_info.ina226.voltage) {
@@ -485,7 +480,7 @@ void gui_reflow_solder_mode_refresh(void)
 	one_sec_count += 1;
 	if (((one_sec_count % 50) == 0) && (system_info.holt_mode != HOT_MODE_STANDBY)) {
 		Serial.printf("x: %d  y: %d diff:%f pwm_pre:%f \r\n", post_x, post_y, value, system_info.pwm_precent);
-		Serial.printf("current mode: %d g_weld_timestamp:%d second: %d target_temp: %d \r\n",
+		Serial.printf("current mode: %d g_weld_timestamp:%d second: %d target_temp: %f \r\n",
 																				system_info.holt_mode,
 																				g_weld_timestamp,
 																				timestamps_seconds, 
