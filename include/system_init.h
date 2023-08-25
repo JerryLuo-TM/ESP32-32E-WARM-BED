@@ -27,13 +27,24 @@
 #define ROTARY_ENCODER_VCC_PIN     -1
 #define ROTARY_ENCODER_STEPS        2  //try 1,2 or 4 to get expected behaviour
 
-#define HOT_MODE_STANDBY        0
-#define HOT_MODE_PRE_HEAT       1
-#define HOT_MODE_KEEP_WARM      2
-#define HOT_MODE_WELD           3
-#define HOT_MODE_COLD           4
-#define HOT_MODE_MAX            5
+/* task cycle ms */
+#define DATA_TASK_CYCLE             100.0f
+#define UI_TASK_CYCLE               20.0f
 
+/* weld reflow soldering T */
+#define TASK_CYCLE                  (UI_TASK_CYCLE / 1000.0f)
+
+/* weld reflow soldering mode */
+typedef enum {
+    HOT_MODE_STANDBY = 0,
+    HOT_MODE_PRE_HEAT,
+    HOT_MODE_KEEP_WARM,
+    HOT_MODE_WELD,
+    HOT_MODE_COLD,
+    HOT_MODE_MAX,
+} weld_heat_mode;
+
+/* power IC patamerter */
 typedef struct {
     float voltage;
     float current;
@@ -57,10 +68,21 @@ typedef struct {
     uint32_t holt_mode;
 } __attribute__ ((packed)) system_info_t;
 
+typedef struct {
+    float target_temp_min;
+	float target_temp;
+    float target_temp_max;
+
+    float heat_rate_min;
+	float heat_rate;
+    float heat_rate_max;
+
+    unsigned long timer_start;
+	uint32_t heat_sec;
+} __attribute__ ((packed)) solder_parameter_t;
+
 extern system_info_t system_info;
 extern TFT_eSPI tft;
-
-extern bool g_key_is_press;
 
 void parameter_init(void);
 void pwm_init(void);
@@ -69,7 +91,7 @@ void encoder_init(void);
 void ina226_init(void);
 void st7789_init(void);
 
-void update_encoder_key(void);
+bool update_encoder_key(void);
 void update_power_sensor(void);
 void update_temputer_sensor(void);
 void update_pwm_out(float duty);

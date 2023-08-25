@@ -111,7 +111,8 @@ void st7789_init(void)
 	tft.drawCentreString("THERM MODE", 120, 4, 4);
 }
 
-void update_encoder_key(void)
+/* 0: nothing 1: pressup*/
+bool update_encoder_key(void)
 {
 	static unsigned long lastTimePressed = 0;
 
@@ -122,11 +123,13 @@ void update_encoder_key(void)
 
 	if (rotaryEncoder.isEncoderButtonClicked()) {
 		if (millis() - lastTimePressed < 500) {
-            return;
+            return false;
         }
-		g_key_is_press = true;
         Serial.print("button pressed ");
+		return true;
 	}
+
+	return false;
 }
 
 

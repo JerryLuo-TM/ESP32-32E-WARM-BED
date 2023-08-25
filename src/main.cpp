@@ -13,9 +13,28 @@ Scheduler runner;
 /* OS */
 void Task_Data_Callback();
 void Task_GUI_Callback();
-Task task_data(100, TASK_FOREVER, &Task_Data_Callback);  //100ms
-Task task_gui(20, TASK_FOREVER, &Task_GUI_Callback);	 //20ms
+Task task_data(DATA_TASK_CYCLE, TASK_FOREVER, &Task_Data_Callback);  //100ms
+Task task_gui(UI_TASK_CYCLE, TASK_FOREVER, &Task_GUI_Callback);	 //20ms
 
+/* PID 参数 */
+double Kp = 7.5, Kd = 1.5;
+double last_value = 0, value = 0;
+double Output_Heat = 0;
+double dt = 0.02;
+
+bool g_solder_is_running = false;
+unsigned long g_solder_timer_start, g_solder_time;
+
+/* 回流焊参数*/
+solder_parameter_t solder_parameter[HOT_MODE_MAX] = {
+	{20.0,  30.0,  40.0,  0.0, 0.0, 0.0, 0, 0xFFFFFFFF},	/* HOT_MODE_STANDBY */
+	{130.0, 140.0, 150.0, 1.0, 1.5, 3.0, 0, 90},			/* HOT_MODE_PRE_HEAT */
+	{130.0, 160.0, 150.0, 0.0, 0.4, 1.0, 0, 60},			/* HOT_MODE_KEEP_WARM */
+	{205.0, 225.0, 245.0, 1.0, 2.0, 3.0, 0, 45},			/* HOT_MODE_WELD */
+	{0.0,    50.0,  60.0, 0.0, 0.0, 0.0, 0, 0xFFFFFFFF},	/* HOT_MODE_COLD */
+};
+
+/* 系统初始化 */
 void setup()
 {
 	Serial.begin(115200);
@@ -40,6 +59,7 @@ void setup()
 	task_gui.enable();
 }
 
+/* 恒温模式 初始化 */
 void gui_thermost_mode_init(void)
 {
     tft.fillScreen(TFT_BLACK);
@@ -72,11 +92,7 @@ void gui_thermost_mode_init(void)
 	tft.unloadFont();
 }
 
-double Kp = 5.0, Kd = 1.0;
-double last_value = 0, value = 0;
-double Output_Heat = 0;
-double dt = 0.02;
-
+/* 恒温模式 页面刷新 */
 void gui_thermost_mode_refresh(void)
 {
 	char buf[50];
@@ -210,6 +226,7 @@ void gui_thermost_mode_refresh(void)
 	system_info.last_pwm_precent = system_info.pwm_precent;
 }
 
+/* 回流焊模式 初始化*/
 void gui_reflow_solder_mode_init(void)
 {
 	uint32_t sx, sy, ex, ey, len;
@@ -223,38 +240,12 @@ void gui_reflow_solder_mode_init(void)
 	tft.println("回 流 焊 模 式");
 	tft.unloadFont();
 
-	// sx = 30; sy = 210; len = tft.width() - sx;
-	// tft.drawFastHLine(sx, sy, len, TFT_RED);
-	// tft.drawFastVLine(40, 40, 240, TFT_RED);
-
-	// sx = 40; sy = 210;
-	// ex = sx + (float)(160 - 25) / 1.2f * CELL_TIME;
-	// ey = sy - (float)(160 - 25) * CELL_TEMP;
-	// tft.drawLine(sx, sy, ex, ey, TFT_GREEN);
-
-	// sx = ex; sy = ey;
-	// ex = sx + (float)(180 - 160) / 0.4f * CELL_TIME;
-	// ey = sy - (float)(180 - 160) * CELL_TEMP;
-	// tft.drawLine(sx, sy, ex, ey, TFT_BLUE);
-
-	// sx = ex; sy = ey;
-	// ex = sx + (float)(217 - 180) / 3.0f * CELL_TIME;
-	// ey = sy - (float)(217 - 180) * CELL_TEMP;
-	// tft.drawLine(sx, sy, ex, ey, TFT_RED);
-
-	// sx = ex; sy = ey;
-	// ex = sx + (float)(240 - 217) / 0.75f * CELL_TIME;
-	// ey = sy - (float)(240 - 217) * CELL_TEMP;
-	// tft.drawLine(sx, sy, ex, ey, TFT_WHITE);
-
-	// sx = ex; sy = ey;
-	// ex = 240-1;
-	// ey = 210;
-	// tft.drawLine(sx, sy, ex, ey, TFT_WHITE);
-
+	/* 分界线 */
 	tft.drawFastHLine(0, 180 - 6, 240, TFT_DARKGREY);
 	tft.drawFastHLine(0, 180 - 5, 240, TFT_DARKGREY);
 	tft.drawFastHLine(0, 180 - 4, 240, TFT_DARKGREY);
+
+	/* 参数 */
 	tft.loadFont(hwkt_24);
 	tft.setTextColor(TFT_GREEN, TFT_BLACK, true);
 	tft.setCursor(1, 183);	tft.println("电压");
@@ -264,26 +255,34 @@ void gui_reflow_solder_mode_init(void)
 	tft.setTextColor(TFT_CYAN, TFT_BLACK, true);
 	tft.setCursor(130 + 1, 183);	tft.println("温度");
 	tft.setTextColor(TFT_ORANGE, TFT_BLACK, true);
-	tft.setCursor(130 + 1, 183 + 30);	tft.println("状态"); // 状态 [ 待机 预热 恒温 回流 降温]
+	tft.setCursor(130 + 1, 183 + 30);	tft.println("状态");
 	tft.unloadFont();
 }
 
-bool g_key_is_press = false;
-bool g_weld_running = false;
-unsigned long g_weld_timestamp_start, g_weld_timestamp;
 
-uint32_t one_sec_count;
 
 //20ms
 void gui_reflow_solder_mode_refresh(void)
 {
-	char buf[50];
-	static unsigned long timestamps_start = 0, timestamps_seconds = 0;
-	int32_t post_x, post_y;
+	char str_buffer[50];
+	static uint32_t one_sec_count = 0;
+	static bool solder_is_running = false;
+	static unsigned long split_time = 0;
+	int64_t post_x, post_y;
 
-	update_encoder_key();
+	/* 旋转编码器 状态 处理 */
+	if (update_encoder_key() == true) {
+		if ((g_solder_is_running == false) && (system_info.holt_mode == HOT_MODE_STANDBY) && (system_info.temputer < 50.0)) {
+			system_info.holt_mode = HOT_MODE_PRE_HEAT;
+			system_info.target_temputer = system_info.temputer;
+			solder_parameter[system_info.holt_mode].timer_start = millis();
+			g_solder_timer_start = millis();
+			g_solder_is_running = true;
+			tft.fillRect(0, 50, 240, 120, TFT_BLACK);
+		}
+	}
 
-	/* 旋转编码器 处理 */
+	/* 旋转编码器 旋钮 处理 */
 	// if (system_info.last_encoder != system_info.encoder) {
 	// 	if (system_info.last_encoder < system_info.encoder) {
 	// 		system_info.holt_mode += 1;
@@ -291,85 +290,44 @@ void gui_reflow_solder_mode_refresh(void)
 	// 		system_info.holt_mode -= 1;
 	// 	}
 
-	/* 旋转编码器按钮 处理 */
-	if (g_key_is_press == true) {
-		if ((g_weld_running == false)
-			&& (system_info.holt_mode == HOT_MODE_STANDBY)
-			&& (system_info.temputer < 100)) {
-			g_weld_running = true;
-			system_info.holt_mode = HOT_MODE_PRE_HEAT;
-			timestamps_start = millis();
-			g_weld_timestamp_start = timestamps_start;
-			tft.fillRect(0, 50, 240, 120, TFT_BLACK);
-		}
-		g_key_is_press = false;
-	}
-
-/*
-	中温 Sn64Bi35Ag1
-	预热 20℃ -> 140℃	50S     1 ~ 3  ℃/S
-	恒温 150℃			 90S     60 ~ 120 S
-	回流 150℃ -> 235℃	30S		1 ~ 3 ℃/S
-	降温 235℃ -> 20℃	50S		2 ~ 4 ℃/S
-*/
-
 	if (system_info.holt_mode == HOT_MODE_STANDBY) {
-		system_info.target_temputer = 20;
-	} else if (system_info.holt_mode == HOT_MODE_PRE_HEAT) {
-		timestamps_seconds = (millis() - timestamps_start) / 1000;
-		system_info.target_temputer += (2.0f * 0.02f);
-		if (system_info.target_temputer > 140) {system_info.target_temputer = 140;}
-		if ((system_info.temputer > 135) && (timestamps_seconds > 60)) {
-			system_info.holt_mode += 1;
-			timestamps_start = millis(); // update timestamps
-		}
-	} else if (system_info.holt_mode == HOT_MODE_KEEP_WARM) {
-		timestamps_seconds = (millis() - timestamps_start) / 1000;
-
-		system_info.target_temputer += (0.4f * 0.02f);
-		if (system_info.target_temputer > 160) {system_info.target_temputer = 160;}
-		if ((system_info.temputer > 155) && (timestamps_seconds > 60)) {
-			system_info.holt_mode += 1;
-			timestamps_start = millis(); // update timestamps
-		}
-	} else if (system_info.holt_mode == HOT_MODE_WELD) {
-		timestamps_seconds = (millis() - timestamps_start) / 1000;
-		system_info.target_temputer += (2.5f * 0.02f);
-		if (system_info.target_temputer > 225) {system_info.target_temputer = 225;}
-		if ((system_info.temputer > 215) && (timestamps_seconds > 30)) {
-			system_info.holt_mode += 1;
-			timestamps_start = millis(); // update timestamps
-		}
-	} else if (system_info.holt_mode == HOT_MODE_COLD) {
-		timestamps_seconds = (millis() - timestamps_start) / 1000;
-		system_info.target_temputer = 60;
-		if ((system_info.temputer <= 60) && (timestamps_seconds > 60)) {
-			g_weld_running = false;
-			system_info.holt_mode = HOT_MODE_STANDBY;
-		}
+		system_info.target_temputer = solder_parameter[system_info.holt_mode].target_temp;
 	} else {
-		// error
-		system_info.target_temputer = 20;
-		Serial.printf("mode error %d", system_info.holt_mode);
+		/* */
+		split_time = (millis() - solder_parameter[system_info.holt_mode].timer_start) / 1000;
+		/* Adjust target temperature, temperature rise */
+		system_info.target_temputer += (solder_parameter[system_info.holt_mode].heat_rate * 0.02f);
+		/* limit the maximum temperature */
+		if (system_info.target_temputer > solder_parameter[system_info.holt_mode].target_temp) {
+			system_info.target_temputer = solder_parameter[system_info.holt_mode].target_temp;
+		}
+		/* The interval is over, ready to move on to the next stage */
+		if ( (system_info.temputer > (solder_parameter[system_info.holt_mode].target_temp - 5.0)) 
+					&& (split_time > solder_parameter[system_info.holt_mode].heat_sec)) {
+			/* next mode */
+			system_info.holt_mode += 1;
+			/* update timestamps */
+			solder_parameter[system_info.holt_mode].timer_start = millis(); 
+		}
 	}
 
-		if (system_info.holt_mode >= HOT_MODE_MAX) {
-			system_info.holt_mode = HOT_MODE_STANDBY;
-		}
+	if (system_info.holt_mode >= HOT_MODE_MAX) {
+		system_info.holt_mode = HOT_MODE_STANDBY;
+	}
 
 	/* 画点 */
-	if (g_weld_running == true) {
-		g_weld_timestamp = (millis() - g_weld_timestamp_start) / 1000;
-		if ((g_weld_timestamp % 2) == 0) {
-			post_x = g_weld_timestamp / 2;
-			post_y = (int32_t)(170.0f - ((float)(system_info.temputer) / 2.5f));
-			if (post_x >= 240) {post_x = 240;}
+	if (g_solder_is_running == true) {
+		g_solder_time = (millis() - g_solder_timer_start) / 1000;
+		if (((g_solder_time * 10) % 15) == 0) {
+			post_x = (g_solder_time * 10) / 15;
+			post_y = (int32_t)(170.0f - ((float)(system_info.temputer) / 2.0f));
+			if (post_x >= TFT_WIDTH) {post_x = TFT_WIDTH;}
 			if (post_y <= 50)  {post_y = 50;}
 			tft.drawPixel(post_x, post_y, TFT_WHITE, 0xFF, TFT_BLACK);
 		}
 	}
 
-	//系统误差
+	/* 系统误差 */
 	value = (double)system_info.target_temputer -  (double)system_info.temputer;
 	Output_Heat = Kp * value + Kd * (value - last_value);
 	if (Output_Heat > 100) {Output_Heat = 100;}
@@ -382,19 +340,19 @@ void gui_reflow_solder_mode_refresh(void)
 		tft.setTextColor(TFT_GREEN, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
-		sprintf(&buf[0], " ");
+		sprintf(&str_buffer[0], " ");
 		if ((int32_t)system_info.ina226.voltage > 9) {
-			sprintf(&buf[1], "%01d", (int32_t)(system_info.ina226.voltage)/10%10);
-			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.voltage)%10);
+			sprintf(&str_buffer[1], "%01d", (int32_t)(system_info.ina226.voltage)/10%10);
+			sprintf(&str_buffer[2], "%01d", (int32_t)(system_info.ina226.voltage)%10);
 		} else {
-			sprintf(&buf[1], " ");
-			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.voltage)%10);
+			sprintf(&str_buffer[1], " ");
+			sprintf(&str_buffer[2], "%01d", (int32_t)(system_info.ina226.voltage)%10);
 		}
-		sprintf(&buf[3], ".");
-		sprintf(&buf[4], "%01d", (int32_t)(system_info.ina226.voltage*10.0)%10);
-		buf[5] = 'V';
-		buf[6] = '\0';
-		tft.drawString(buf, 126, 183);
+		sprintf(&str_buffer[3], ".");
+		sprintf(&str_buffer[4], "%01d", (int32_t)(system_info.ina226.voltage*10.0)%10);
+		str_buffer[5] = 'V';
+		str_buffer[6] = '\0';
+		tft.drawString(str_buffer, 126, 183);
 		tft.unloadFont();
 	}
 
@@ -403,23 +361,23 @@ void gui_reflow_solder_mode_refresh(void)
 		tft.setTextColor(TFT_VIOLET, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
-		sprintf(&buf[0], " ");
+		sprintf(&str_buffer[0], " ");
 		if ((int32_t)system_info.ina226.power > 99) {
-			sprintf(&buf[1], "%01d", (int32_t)(system_info.ina226.power)/100%10);
-			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.power)/10%10);
-			sprintf(&buf[3], "%01d", (int32_t)(system_info.ina226.power)%10);
+			sprintf(&str_buffer[1], "%01d", (int32_t)(system_info.ina226.power)/100%10);
+			sprintf(&str_buffer[2], "%01d", (int32_t)(system_info.ina226.power)/10%10);
+			sprintf(&str_buffer[3], "%01d", (int32_t)(system_info.ina226.power)%10);
 		} else if ((int32_t)system_info.ina226.power > 9) {
-			sprintf(&buf[1], "0");
-			sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.power)/10%10);
-			sprintf(&buf[3], "%01d", (int32_t)(system_info.ina226.power)%10);
+			sprintf(&str_buffer[1], "0");
+			sprintf(&str_buffer[2], "%01d", (int32_t)(system_info.ina226.power)/10%10);
+			sprintf(&str_buffer[3], "%01d", (int32_t)(system_info.ina226.power)%10);
 		} else {
-			sprintf(&buf[1], "0");
-			sprintf(&buf[2], "0");
-			sprintf(&buf[3], "%01d", (int32_t)(system_info.ina226.power)%10);
+			sprintf(&str_buffer[1], "0");
+			sprintf(&str_buffer[2], "0");
+			sprintf(&str_buffer[3], "%01d", (int32_t)(system_info.ina226.power)%10);
 		}
-		buf[4] = 'W';
-		buf[5] = '\0';
-		tft.drawString(buf, 126, 183 + 30);
+		str_buffer[4] = 'W';
+		str_buffer[5] = '\0';
+		tft.drawString(str_buffer, 126, 183 + 30);
 		tft.unloadFont();
 	}
 
@@ -428,22 +386,22 @@ void gui_reflow_solder_mode_refresh(void)
 		tft.setTextColor(TFT_CYAN, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
-		sprintf(&buf[0], " ");
+		sprintf(&str_buffer[0], " ");
 		if ((int32_t)system_info.temputer > 99) {
-			sprintf(&buf[1], "%01d", (int32_t)(system_info.temputer)/100%10);
-			sprintf(&buf[2], "%01d", (int32_t)(system_info.temputer)/10%10);
-			sprintf(&buf[3], "%01d", (int32_t)(system_info.temputer)%10);
+			sprintf(&str_buffer[1], "%01d", (int32_t)(system_info.temputer)/100%10);
+			sprintf(&str_buffer[2], "%01d", (int32_t)(system_info.temputer)/10%10);
+			sprintf(&str_buffer[3], "%01d", (int32_t)(system_info.temputer)%10);
 		} else if ((int32_t)system_info.temputer > 9) {
-			sprintf(&buf[1], " ");
-			sprintf(&buf[2], "%01d", (int32_t)(system_info.temputer)/10%10);
-			sprintf(&buf[3], "%01d", (int32_t)(system_info.temputer)%10);
+			sprintf(&str_buffer[1], " ");
+			sprintf(&str_buffer[2], "%01d", (int32_t)(system_info.temputer)/10%10);
+			sprintf(&str_buffer[3], "%01d", (int32_t)(system_info.temputer)%10);
 		} else {
-			sprintf(&buf[1], " ");
-			sprintf(&buf[2], " ");
-			sprintf(&buf[3], "%01d", (int32_t)(system_info.temputer)%10);
+			sprintf(&str_buffer[1], " ");
+			sprintf(&str_buffer[2], " ");
+			sprintf(&str_buffer[3], "%01d", (int32_t)(system_info.temputer)%10);
 		}
-		// sprintf(&buf[4], "℃");
-		tft.drawString(buf, 236, 183);
+		// sprintf(&str_buffer[4], "℃");
+		tft.drawString(str_buffer, 236, 183);
 		tft.unloadFont();
 	}
 
@@ -474,16 +432,14 @@ void gui_reflow_solder_mode_refresh(void)
 
 
 	/* 0.0 - 1.0 */
-	update_pwm_out(system_info.pwm_precent/100.0f);
+	update_pwm_out(system_info.pwm_precent / 100.0f);
 
 	/* 打印状态 */
-	one_sec_count += 1;
-	if (((one_sec_count % 50) == 0) && (system_info.holt_mode != HOT_MODE_STANDBY)) {
+	if (((one_sec_count++ % 50) == 0) && (system_info.holt_mode != HOT_MODE_STANDBY)) {
 		Serial.printf("x: %d  y: %d diff:%f pwm_pre:%f \r\n", post_x, post_y, value, system_info.pwm_precent);
-		Serial.printf("current mode: %d g_weld_timestamp:%d second: %d target_temp: %f \r\n",
+		Serial.printf("solder_mode[%d] solder_time[%d] target_temp[%f] \r\n",
 																				system_info.holt_mode,
-																				g_weld_timestamp,
-																				timestamps_seconds, 
+																				g_solder_time,
 																				system_info.target_temputer);
 	}
 
@@ -500,8 +456,6 @@ void gui_reflow_solder_mode_refresh(void)
 /* 10Hz */
 void Task_Data_Callback()
 {
-	// Serial.printf("millis:%d \r\n", millis());
-
 	/* MAX6675 data rate 250ms */
 	update_temputer_sensor();
 
