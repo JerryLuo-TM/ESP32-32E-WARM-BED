@@ -1,6 +1,6 @@
 
 
-![image](image/IMG_02_2.jpg)
+![image](image/IMG_02_1.jpg)
 
 ![image](image/IMG_01.jpg)
 
