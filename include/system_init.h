@@ -44,6 +44,16 @@ typedef enum {
     HOT_MODE_MAX,
 } weld_heat_mode;
 
+typedef enum {
+	GUI_MAIN_SELECT_INDEX = 0,
+	GUI_MIN_INDEX,
+	GUI_THREAD_MODE_INDEX = GUI_MIN_INDEX,
+	GUI_REFLOW_SOLDER_INDEX,
+	GUI_PARAMETER_CONFIG_INDEX,
+	GUI_SYSTEM_CONFIG_INDEX,
+	GUI_MAX_INDEX,
+} gui_page_index;
+
 /* power IC patamerter */
 typedef struct {
     float voltage;
@@ -92,6 +102,8 @@ void ina226_init(void);
 void st7789_init(void);
 
 bool update_encoder_key(void);
+bool encoder_key_is_down(void);
+
 void update_power_sensor(void);
 void update_temputer_sensor(void);
 void update_pwm_out(float duty);

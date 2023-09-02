@@ -30,7 +30,7 @@ void parameter_init(void)
 	system_info.last_ina226.current = -1;
 	system_info.last_ina226.power = -1;
     system_info.last_target_temputer = -1;
-	system_info.last_encoder = 1;
+	system_info.last_encoder = 0;
 	system_info.last_pwm_precent = 1.0f;
 	system_info.last_holt_mode = HOT_MODE_MAX;
 
@@ -44,7 +44,7 @@ void parameter_init(void)
 	system_info.holt_mode = HOT_MODE_STANDBY;
 
 	/* origin target temputer */
-    system_info.target_temputer = 65;
+    system_info.target_temputer = 25;
 }
 
 void pwm_init(void)
@@ -118,14 +118,23 @@ bool update_encoder_key(void)
 
 	if (rotaryEncoder.encoderChanged()) {
 		system_info.encoder = rotaryEncoder.readEncoder();
-		Serial.printf("Encoder Value: %d \r\n", system_info.encoder);
+		Serial.printf("[Encoder] last Value:%d  Value:%d \r\n", system_info.last_encoder, system_info.encoder);
 	}
 
 	if (rotaryEncoder.isEncoderButtonClicked()) {
 		if (millis() - lastTimePressed < 500) {
             return false;
         }
-        Serial.print("button pressed ");
+        Serial.print("button pressed \r\n");
+		return true;
+	}
+
+	return false;
+}
+
+bool encoder_key_is_down(void)
+{
+	if (rotaryEncoder.isEncoderButtonDown()) {
 		return true;
 	}
 
