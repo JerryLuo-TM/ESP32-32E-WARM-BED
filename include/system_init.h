@@ -35,7 +35,7 @@
 #define TASK_CYCLE                  (UI_TASK_CYCLE / 1000.0f)
 
 /* system parameter */
-#define LONG_PRESS_TIMEOUT          1600
+#define LONG_PRESS_RETURN_TIME      1200
 
 /* weld reflow soldering mode */
 typedef enum {

@@ -100,7 +100,7 @@ void gui_thermost_mode_init(void)
 void gui_thermost_mode_refresh(void)
 {
 	/* PID 参数 */
-	static double Kp = 6.0, Kd = 2.5;
+	static double Kp = 2.5, Kd = 0.5;
 	static double last_value = 0, value = 0;
 	static double Output_Heat = 0;
 	static double dt = 0.02;
@@ -118,7 +118,7 @@ void gui_thermost_mode_refresh(void)
 		long_press_flag = true;
 		key_press_timestamp = millis();
 	} else if ((button_status == BUT_DOWN) && (long_press_flag == true)) {
-		if ((millis() - key_press_timestamp) > 1200) {
+		if ((millis() - key_press_timestamp) > LONG_PRESS_RETURN_TIME) {
 			/* 长按退出 */
 			gui_page_select = 0;
 			gui_page_current = 0;
@@ -132,15 +132,8 @@ void gui_thermost_mode_refresh(void)
 		long_press_flag = false;
 	}
 
-	/* 温控部分 PID */
-	value = (double)system_info.target_temputer - (double)system_info.temputer;
-	Output_Heat = Kp * value + Kd * (value - last_value);
-	if (Output_Heat > 100) { Output_Heat = 100; }
-	if (Output_Heat < 0.0) { Output_Heat = 0.001; }
-	system_info.pwm_precent = (int32_t)Output_Heat;
-	last_value = value;
-
 	/* 旋转编码器 处理 */
+	update_encoder_value();
 	if (last_system_info.encoder != system_info.encoder) {
 		if ((last_system_info.encoder == 0) && (system_info.encoder == 1000)) {
 			// nothing
@@ -160,6 +153,14 @@ void gui_thermost_mode_refresh(void)
 			system_info.target_temputer = 20;
 		}
 	}
+
+	/* 温控部分 PID */
+	value = (double)system_info.target_temputer - (double)system_info.temputer;
+	Output_Heat = Kp * value + Kd * (value - last_value);
+	if (Output_Heat > 100.0f) { Output_Heat = 100.0f; }
+	if (Output_Heat < 0.0f) { Output_Heat = 0.0f; }
+	system_info.pwm_precent = (int32_t)Output_Heat;
+	last_value = value;
 
 	/* 当前温度 */
 	if (last_system_info.temputer != system_info.temputer) {
@@ -187,10 +188,14 @@ void gui_thermost_mode_refresh(void)
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
 		sprintf(&buf[0], " ");
-		if ((int32_t)system_info.ina226.voltage > 9) {sprintf(&buf[1], "%01d", (int32_t)system_info.ina226.voltage/10%10);} else {sprintf(&buf[1], " ");}
-		sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.voltage)%10);
+		if ((int32_t)system_info.ina226.voltage > 9) {
+			sprintf(&buf[1], "%01d", (int32_t)system_info.ina226.voltage / 10 % 10);
+		} else {
+			sprintf(&buf[1], " ");
+		}
+		sprintf(&buf[2], "%01d", (int32_t)(system_info.ina226.voltage) % 10);
 		sprintf(&buf[3], ".");
-		sprintf(&buf[4], "%01d", (int32_t)(system_info.ina226.voltage*10.0)%10);
+		sprintf(&buf[4], "%01d", (int32_t)(system_info.ina226.voltage * 10.0) % 10);
 		buf[5] = 'V';
 		buf[6] = '\0';
 		tft.drawString(buf, 120, 186);
@@ -203,10 +208,14 @@ void gui_thermost_mode_refresh(void)
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
 		sprintf(&buf[0], " ");
-		if ((int32_t)system_info.ina226.current > 9) {sprintf(&buf[1], "%01d", (int32_t)system_info.ina226.current/10%10);} else {sprintf(&buf[1], " ");}
-		sprintf(&buf[2], "%01d", (int32_t)system_info.ina226.current%10);
+		if ((int32_t)system_info.ina226.current > 9) {
+			sprintf(&buf[1], "%01d", (int32_t)system_info.ina226.current / 10 % 10);
+		} else {
+			sprintf(&buf[1], " ");
+		}
+		sprintf(&buf[2], "%01d", (int32_t)system_info.ina226.current % 10);
 		sprintf(&buf[3], ".");
-		sprintf(&buf[4], "%01d", (int32_t)(system_info.ina226.current*10.0)%10);
+		sprintf(&buf[4], "%01d", (int32_t)(system_info.ina226.current * 10.0) % 10);
 		buf[5] = 'A';
 		buf[6] = '\0';
 		tft.drawString(buf, 120, 214);
@@ -215,12 +224,35 @@ void gui_thermost_mode_refresh(void)
 
 	/* 功率 */
 	if (last_system_info.ina226.power != system_info.ina226.power) {
+
 		tft.setTextColor(TFT_MAGENTA, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
-		sprintf(&buf[0], "%03dW", ((int32_t)system_info.ina226.power));
+		sprintf(&buf[0], " ");
+		if ((int32_t)system_info.ina226.power > 99) {
+			sprintf(&buf[1], "1");
+			sprintf(&buf[2], "0");
+			sprintf(&buf[3], "0");
+		} else if ((int32_t)system_info.ina226.power > 9) {
+			sprintf(&buf[1], " ");
+			sprintf(&buf[2], "%01d", (int32_t)system_info.ina226.power / 10 % 10);
+			sprintf(&buf[3], "%01d", (int32_t)system_info.ina226.power % 10);
+		} else {
+			sprintf(&buf[1], " ");
+			sprintf(&buf[2], " ");
+			sprintf(&buf[3], "%01d", (int32_t)system_info.ina226.power % 10);
+		}
+		buf[4] = 'W';
+		buf[5] = '\0';
 		tft.drawString(buf, 240, 186);
 		tft.unloadFont();
+	
+		// tft.setTextColor(TFT_MAGENTA, TFT_BLACK, true);
+		// tft.setTextDatum(TR_DATUM);/* 右上 */
+		// tft.loadFont(fzchsjt_24);
+		// sprintf(&buf[0], "%03dW", ((int32_t)system_info.ina226.power));
+		// tft.drawString(buf, 240, 186);
+		// tft.unloadFont();
 	}
 
 	/* 百分比 */
@@ -228,18 +260,18 @@ void gui_thermost_mode_refresh(void)
 		tft.setTextColor(TFT_RED, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
-		buf[0] = ' ';
+		sprintf(&buf[0], " ");
 		if ((int32_t)system_info.pwm_precent > 99) {
-			buf[1] = '1';
-			buf[2] = '0';
-			buf[3] = '0';
+			sprintf(&buf[1], "1");
+			sprintf(&buf[2], "0");
+			sprintf(&buf[3], "0");
 		} else if ((int32_t)system_info.pwm_precent > 9) {
-			buf[1] = ' ';
+			sprintf(&buf[1], " ");
 			sprintf(&buf[2], "%01d", (int32_t)system_info.pwm_precent / 10 % 10);
 			sprintf(&buf[3], "%01d", (int32_t)system_info.pwm_precent % 10);
 		} else {
-			buf[1] = ' ';
-			buf[2] = ' ';
+			sprintf(&buf[1], " ");
+			sprintf(&buf[2], " ");
 			sprintf(&buf[3], "%01d", (int32_t)system_info.pwm_precent % 10);
 		}
 		buf[4] = '%';
@@ -313,7 +345,7 @@ void gui_reflow_solder_mode_refresh(void)
 		long_press_flag = true;
 		key_press_timestamp = millis();
 	} else if ((button_status == BUT_DOWN) && (long_press_flag == true)) {
-		if ((millis() - key_press_timestamp) > 1200) {
+		if ((millis() - key_press_timestamp) > LONG_PRESS_RETURN_TIME) {
 			/* 长按退出 */
 			gui_page_select = 0;
 			gui_page_current = 0;
@@ -500,7 +532,7 @@ void Task_Data_Callback()
 	static uint32_t count = 0;
 
 	/* MAX6675 data rate 250ms */
-	if (((count++) % 3) == 0) {
+	if (((count++) % 4) == 0) {
 		update_temputer_sensor();
 	}
 
