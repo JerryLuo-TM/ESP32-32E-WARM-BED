@@ -8,22 +8,21 @@
 #include "font/fzchsjt_zm24.h"
 #include "font/fzchsjt_zm64.h"
 
+/* 系统参数*/
 system_info_t system_info;
-Scheduler runner;
+system_info_t last_system_info;
 
 /* OS */
+Scheduler runner;
 void Task_Data_Callback();
 void Task_GUI_Callback();
-Task task_data(DATA_TASK_CYCLE, TASK_FOREVER, &Task_Data_Callback);  //100ms
-Task task_gui(UI_TASK_CYCLE, TASK_FOREVER, &Task_GUI_Callback);	 //20ms
-
-bool g_solder_is_running = false;
-unsigned long g_solder_timer_start, g_solder_time;
+Task task_data(DATA_TASK_CYCLE, TASK_FOREVER, &Task_Data_Callback);	// 100ms
+Task task_gui(UI_TASK_CYCLE, TASK_FOREVER, &Task_GUI_Callback);		// 20ms
 
 /* ui 界面参数 */
 uint32_t gui_page_select = 0;
 uint32_t gui_page_current = 0;
-bool main_page_need_init = true;
+bool main_page_need_init = true;	// 菜单页初始化标志
 
 /* 回流焊参数*/
 solder_parameter_t solder_parameter[HOT_MODE_MAX] = {
@@ -33,6 +32,9 @@ solder_parameter_t solder_parameter[HOT_MODE_MAX] = {
 	{205.0, 225.0, 245.0, 1.0, 2.0, 3.0, 0, 45},			/* HOT_MODE_WELD */
 	{0.0,    50.0,  60.0, 0.0, 0.0, 0.0, 0, 0xFFFFFFFF},	/* HOT_MODE_COLD */
 };
+
+bool g_solder_is_running = false;
+unsigned long g_solder_timer_start, g_solder_time;
 
 /* 系统初始化 */
 void setup()
@@ -53,8 +55,10 @@ void setup()
 
 	/* START TASK SCHEDULE */
 	runner.init();
+
 	runner.addTask(task_data);
 	runner.addTask(task_gui);
+
 	task_data.enable();
 	task_gui.enable();
 }
@@ -63,6 +67,9 @@ void setup()
 void gui_thermost_mode_init(void)
 {
 	parameter_init();
+
+	/* 必要参数初始化 */
+	system_info.target_temputer = solder_parameter[system_info.holt_mode].target_temp;
 
     tft.fillScreen(TFT_BLACK);
 
@@ -97,7 +104,7 @@ void gui_thermost_mode_refresh(void)
 	static double last_value = 0, value = 0;
 	static double Output_Heat = 0;
 	static double dt = 0.02;
-
+	/* 界面参数 */
 	char buf[50];
 	static bool long_press_flag = false;
 	static unsigned long key_press_timestamp;
@@ -107,7 +114,7 @@ void gui_thermost_mode_refresh(void)
 		if (long_press_flag == false) {
 			key_press_timestamp = millis();
 		} else {
-			if ((millis() - key_press_timestamp) >= 1600) {
+			if ((millis() - key_press_timestamp) >= LONG_PRESS_TIMEOUT) {
 				gui_page_select = 0;
 				gui_page_current = 0;
 				main_page_need_init = true;
@@ -125,19 +132,19 @@ void gui_thermost_mode_refresh(void)
 	/* 温控部分 PID */
 	value = (double)system_info.target_temputer - (double)system_info.temputer;
 	Output_Heat = Kp * value + Kd * (value - last_value);
-	if (Output_Heat > 100) {Output_Heat = 100;}
-	if (Output_Heat < 0.0) {Output_Heat = 0.001;}
+	if (Output_Heat > 100) { Output_Heat = 100; }
+	if (Output_Heat < 0.0) { Output_Heat = 0.001; }
 	system_info.pwm_precent = (int32_t)Output_Heat;
 	last_value = value;
 
 	/* 旋转编码器 处理 */
-	if (system_info.last_encoder != system_info.encoder) {
-		if ((system_info.last_encoder == 0) && (system_info.encoder == 1000)) {
+	if (last_system_info.encoder != system_info.encoder) {
+		if ((last_system_info.encoder == 0) && (system_info.encoder == 1000)) {
 			// nothing
-		} else if ((system_info.last_encoder == 1000) && (system_info.encoder == 0)) {
+		} else if ((last_system_info.encoder == 1000) && (system_info.encoder == 0)) {
 			system_info.target_temputer += 1;
 		} else {
-			if (system_info.last_encoder < system_info.encoder) {
+			if (last_system_info.encoder < system_info.encoder) {
 				system_info.target_temputer += 1;
 			} else {
 				system_info.target_temputer -= 1;
@@ -152,7 +159,7 @@ void gui_thermost_mode_refresh(void)
 	}
 
 	/* 当前温度 */
-	if (system_info.last_temputer != system_info.temputer) {
+	if (last_system_info.temputer != system_info.temputer) {
 		tft.setTextColor(TFT_CYAN, TFT_BLACK, true);
 		tft.setTextDatum(TL_DATUM);/* 左上 */
 		tft.loadFont(fzchsjt_64);
@@ -162,7 +169,7 @@ void gui_thermost_mode_refresh(void)
 	}
 
 	/* 设定温度*/
-	if (system_info.last_target_temputer != system_info.target_temputer) {
+	if (last_system_info.target_temputer != system_info.target_temputer) {
 		tft.setTextColor(TFT_GREENYELLOW, TFT_BLACK, true);
 		tft.setTextDatum(TL_DATUM);/* 左上 */
 		tft.loadFont(fzchsjt_64);
@@ -172,7 +179,7 @@ void gui_thermost_mode_refresh(void)
 	}
 
 	/* 电压 */
-	if (system_info.last_ina226.voltage != system_info.ina226.voltage) {
+	if (last_system_info.ina226.voltage != system_info.ina226.voltage) {
 		tft.setTextColor(TFT_GREEN, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
@@ -188,7 +195,7 @@ void gui_thermost_mode_refresh(void)
 	}
 
 	/* 电流 */
-	if (system_info.last_ina226.current != system_info.ina226.current) {
+	if (last_system_info.ina226.current != system_info.ina226.current) {
 		tft.setTextColor(TFT_SKYBLUE, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
@@ -204,7 +211,7 @@ void gui_thermost_mode_refresh(void)
 	}
 
 	/* 功率 */
-	if (system_info.last_ina226.power != system_info.ina226.power) {
+	if (last_system_info.ina226.power != system_info.ina226.power) {
 		tft.setTextColor(TFT_MAGENTA, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
@@ -214,11 +221,11 @@ void gui_thermost_mode_refresh(void)
 	}
 
 	/* 百分比 */
-	if (system_info.last_pwm_precent != system_info.pwm_precent) {
+	if (last_system_info.pwm_precent != system_info.pwm_precent) {
 		tft.setTextColor(TFT_RED, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
-		sprintf(&buf[0], " ");
+		buf[0] = ' ';
 		if ((int32_t)system_info.pwm_precent > 99) {
 			buf[1] = '1';
 			buf[2] = '0';
@@ -238,13 +245,7 @@ void gui_thermost_mode_refresh(void)
 		tft.unloadFont();
 	}
 
-	system_info.last_temputer = system_info.temputer;
-    system_info.last_target_temputer = system_info.target_temputer;
-	system_info.last_ina226.voltage = system_info.ina226.voltage;
-	system_info.last_ina226.current = system_info.ina226.current;
-	system_info.last_ina226.power = system_info.ina226.power;
-	system_info.last_encoder = system_info.encoder;
-	system_info.last_pwm_precent = system_info.pwm_precent;
+	memcpy(&last_system_info, &system_info, sizeof(system_info_t));
 }
 
 /* 回流焊模式 初始化*/
@@ -254,13 +255,12 @@ void gui_reflow_solder_mode_init(void)
 
 	parameter_init();
 
-	// 必要参数初始化
+	/* 必要参数初始化 */
 	system_info.holt_mode = HOT_MODE_STANDBY;
-	system_info.target_temputer = 25;
+	system_info.target_temputer = solder_parameter[system_info.holt_mode].target_temp;
 
     tft.fillScreen(TFT_BLACK);
-
-	tft.setTextDatum(TL_DATUM);/* 左顶 */
+	tft.setTextDatum(TL_DATUM); /* 左上 */
 	tft.loadFont(hwkt_32);
 	tft.setTextColor(TFT_GOLD, TFT_BLACK, true);
 	tft.setCursor(24, 4);
@@ -294,12 +294,11 @@ void gui_reflow_solder_mode_refresh(void)
 	static double last_value = 0, value = 0;
 	static double Output_Heat = 0;
 	static double dt = 0.02;
-
+	/* 必须参数 */
 	char str_buffer[50];
-	static uint32_t one_sec_count = 0;
-	static bool solder_is_running = false;
-	static unsigned long split_time = 0;
-	int64_t post_x, post_y;
+	static uint32_t one_sec_count = 0;		// 周期串口打印计数值
+	static unsigned long split_time = 0; 	// 阶段运行时间
+	int64_t post_x, post_y;					// 描点坐标
 
 	static bool long_press_flag = false;
 	static unsigned long key_press_timestamp;
@@ -313,8 +312,9 @@ void gui_reflow_solder_mode_refresh(void)
 			if ((millis() - key_press_timestamp) >= 1600) {
 				gui_page_select = 0;
 				gui_page_current = 0;
+				system_info.target_temputer = 25;
 				main_page_need_init = true;
-				update_pwm_out(0);
+				g_solder_is_running = false;
 				return;
 			}
 		}
@@ -324,6 +324,7 @@ void gui_reflow_solder_mode_refresh(void)
 		key_press_timestamp = millis();
 	}
 
+	/* 旋转编码器 按键 处理 */
 	if (update_encoder_key() == true) {
 		if ((g_solder_is_running == false) && (system_info.holt_mode == HOT_MODE_STANDBY) && (system_info.temputer < 50.0)) {
 			system_info.holt_mode = HOT_MODE_PRE_HEAT;
@@ -339,7 +340,7 @@ void gui_reflow_solder_mode_refresh(void)
 	if (system_info.holt_mode == HOT_MODE_STANDBY) {
 		system_info.target_temputer = solder_parameter[system_info.holt_mode].target_temp;
 	} else {
-		/* */
+		/* 阶段运行时间 单位/秒 */
 		split_time = (millis() - solder_parameter[system_info.holt_mode].timer_start) / 1000;
 		/* Adjust target temperature, temperature rise */
 		system_info.target_temputer += (solder_parameter[system_info.holt_mode].heat_rate * 0.02f);
@@ -364,6 +365,7 @@ void gui_reflow_solder_mode_refresh(void)
 
 	if (system_info.holt_mode >= HOT_MODE_MAX) {
 		system_info.holt_mode = HOT_MODE_STANDBY;
+		g_solder_is_running = false;
 	}
 
 	/* 系统误差 */
@@ -387,7 +389,7 @@ void gui_reflow_solder_mode_refresh(void)
 	}
 
 	/* 电压 */
-	if (system_info.last_ina226.voltage != system_info.ina226.voltage) {
+	if (last_system_info.ina226.voltage != system_info.ina226.voltage) {
 		tft.setTextColor(TFT_GREEN, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
@@ -408,7 +410,7 @@ void gui_reflow_solder_mode_refresh(void)
 	}
 
 	/* 功率 */
-	if (system_info.last_ina226.power != system_info.ina226.power) {
+	if (last_system_info.ina226.power != system_info.ina226.power) {
 		tft.setTextColor(TFT_VIOLET, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
@@ -433,7 +435,7 @@ void gui_reflow_solder_mode_refresh(void)
 	}
 
 	/* 温度 */
-	if (system_info.last_temputer != system_info.temputer) {
+	if (last_system_info.temputer != system_info.temputer) {
 		tft.setTextColor(TFT_CYAN, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
@@ -457,7 +459,7 @@ void gui_reflow_solder_mode_refresh(void)
 	}
 
 	/* 状态 */
-	if (system_info.last_holt_mode != system_info.holt_mode) {
+	if (last_system_info.holt_mode != system_info.holt_mode) {
 		tft.loadFont(hwkt_24);
 		if (system_info.holt_mode == HOT_MODE_STANDBY) {
 			tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
@@ -485,26 +487,23 @@ void gui_reflow_solder_mode_refresh(void)
 	if (((one_sec_count++ % 50) == 0) && (system_info.holt_mode != HOT_MODE_STANDBY)) {
 		Serial.printf("x: %d  y: %d diff:%f pwm_pre:%f \r\n", post_x, post_y, value, system_info.pwm_precent);
 		Serial.printf("solder_mode[%d] solder_time[%d] target_temp[%f] \r\n",
-																				system_info.holt_mode,
-																				g_solder_time,
-																				system_info.target_temputer);
+																		system_info.holt_mode,
+																		g_solder_time,
+																		system_info.target_temputer);
 	}
 
-	system_info.last_temputer = system_info.temputer;
-    system_info.last_target_temputer = system_info.target_temputer;
-	system_info.last_ina226.voltage = system_info.ina226.voltage;
-	system_info.last_ina226.current = system_info.ina226.current;
-	system_info.last_ina226.power = system_info.ina226.power;
-	system_info.last_encoder = system_info.encoder;
-	system_info.last_pwm_precent = system_info.pwm_precent;
-	system_info.last_holt_mode = system_info.holt_mode;
+	memcpy(&last_system_info, &system_info, sizeof(system_info_t));
 }
 
 /* 10Hz */
 void Task_Data_Callback()
 {
+	static uint32_t count = 0;
+
 	/* MAX6675 data rate 250ms */
-	update_temputer_sensor();
+	if (((count++) % 3) == 0) {
+		update_temputer_sensor();
+	}
 
 	update_power_sensor();
 }
@@ -517,7 +516,7 @@ void gui_main_select_page()
 	static bool first_press_flag = false;
 	static unsigned long key_press_timestamp;
 
-	system_info.last_encoder = system_info.encoder;
+	last_system_info.encoder = system_info.encoder;
 	last_point_page_number = point_page_number;
 
 	/* 旋转编码器 按钮 处理 */
@@ -537,13 +536,13 @@ void gui_main_select_page()
 	}
 
 	/* 旋转编码器 旋钮 处理 */
-	if (system_info.last_encoder != system_info.encoder) {
-		if ((system_info.last_encoder == 0) && (system_info.encoder == 1000)) {
+	if (last_system_info.encoder != system_info.encoder) {
+		if ((last_system_info.encoder == 0) && (system_info.encoder == 1000)) {
 			// nothing
-		} else if ((system_info.last_encoder == 1000) && (system_info.encoder == 0)) {
+		} else if ((last_system_info.encoder == 1000) && (system_info.encoder == 0)) {
 			point_page_number -= 1;
 		} else {
-			if (system_info.last_encoder < system_info.encoder) {
+			if (last_system_info.encoder < system_info.encoder) {
 				point_page_number -= 1;
 			} else {
 				point_page_number += 1;

@@ -25,14 +25,14 @@ void IRAM_ATTR readEncoderISR()
 
 void parameter_init(void)
 {
-	system_info.last_temputer = -1;
-	system_info.last_ina226.voltage = -1;
-	system_info.last_ina226.current = -1;
-	system_info.last_ina226.power = -1;
-    system_info.last_target_temputer = -1;
-	system_info.last_encoder = 0;
-	system_info.last_pwm_precent = 1.0f;
-	system_info.last_holt_mode = HOT_MODE_MAX;
+	last_system_info.temputer = -1;
+	last_system_info.ina226.voltage = -1;
+	last_system_info.ina226.current = -1;
+	last_system_info.ina226.power = -1;
+    last_system_info.target_temputer = -1;
+	last_system_info.encoder = 0;
+	last_system_info.pwm_precent = 1.0f;
+	last_system_info.holt_mode = HOT_MODE_MAX;
 
 	system_info.temputer = 0;
 	system_info.ina226.voltage = 0;
@@ -118,14 +118,14 @@ bool update_encoder_key(void)
 
 	if (rotaryEncoder.encoderChanged()) {
 		system_info.encoder = rotaryEncoder.readEncoder();
-		Serial.printf("[Encoder] last Value:%d  Value:%d \r\n", system_info.last_encoder, system_info.encoder);
+		Serial.printf("[Encoder] last Value:%d  Value:%d \r\n", last_system_info.encoder, system_info.encoder);
 	}
 
 	if (rotaryEncoder.isEncoderButtonClicked()) {
 		if (millis() - lastTimePressed < 500) {
             return false;
         }
-        Serial.print("button pressed \r\n");
+        //Serial.print("button pressed \r\n");
 		return true;
 	}
 
@@ -144,12 +144,7 @@ bool encoder_key_is_down(void)
 
 void update_temputer_sensor(void)
 {
-	static uint32_t count = 0;
-
-	count += 1;
-	if ((count % 3) == 0) {
-		system_info.temputer = thermocouple.readCelsius();
-	}
+	system_info.temputer = thermocouple.readCelsius();
 }
 
 
@@ -163,9 +158,9 @@ void update_power_sensor(void)
 void update_pwm_out(float duty)
 {
 	if (duty < 0.0) {
-		pwm.writeScaled(0.0);
+		pwm.writeScaled(0.0f);
 	} else if (duty > 1.0) {
-		pwm.writeScaled(1.0);
+		pwm.writeScaled(1.0f);
 	} else {
 		pwm.writeScaled(duty);
 	}

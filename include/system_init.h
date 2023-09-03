@@ -34,6 +34,9 @@
 /* weld reflow soldering T */
 #define TASK_CYCLE                  (UI_TASK_CYCLE / 1000.0f)
 
+/* system parameter */
+#define LONG_PRESS_TIMEOUT          1600
+
 /* weld reflow soldering mode */
 typedef enum {
     HOT_MODE_STANDBY = 0,
@@ -62,14 +65,6 @@ typedef struct {
 } __attribute__ ((packed)) ina226_t;
 
 typedef struct {
-    /* last value */
-    ina226_t last_ina226;
-    float last_temputer;
-    uint32_t last_encoder;
-    float last_target_temputer;
-    float last_pwm_precent;
-    uint32_t last_holt_mode;
-    /* current value */
     ina226_t ina226;
     float temputer;
     uint32_t encoder;
@@ -92,6 +87,7 @@ typedef struct {
 } __attribute__ ((packed)) solder_parameter_t;
 
 extern system_info_t system_info;
+extern system_info_t last_system_info;
 extern TFT_eSPI tft;
 
 void parameter_init(void);
