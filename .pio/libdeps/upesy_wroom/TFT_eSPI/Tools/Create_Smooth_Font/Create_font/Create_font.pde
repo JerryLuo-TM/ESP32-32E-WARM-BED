@@ -153,7 +153,7 @@ static final int[] unicodeBlocks = {
   // Block range,   //Block name, Code points, Assigned characters, Scripts
   // First, last,   //Range is inclusive of first and last codes
   
-  // 0x0021, 0x007E, //Basic Latin, 128, 128, Latin (52 characters), Common (76 characters)
+  0x0021, 0x007E, //Basic Latin, 128, 128, Latin (52 characters), Common (76 characters)
   
   //0x0080, 0x00FF, //Latin-1 Supplement, 128, 128, Latin (64 characters), Common (64 characters)
   //0x0100, 0x017F, //Latin Extended-A, 128, 128, Latin
@@ -238,7 +238,7 @@ static final int[] unicodeBlocks = {
   //0x2460, 0x24FF, //Enclosed Alphanumerics, 160, 160, Common
   //0x2500, 0x257F, //Box Drawing, 128, 128, Common
   //0x2580, 0x259F, //Block Elements, 32, 32, Common
-  0x25A0, 0x25FF, //Geometric Shapes, 96, 96, Common
+  0x25A0, 0x25FF, //Geometric Shapes, 96, 96, Common   // ●
   //0x2600, 0x26FF, //Miscellaneous Symbols, 256, 256, Common
   //0x2700, 0x27BF, //Dingbats, 192, 192, Common
   //0x27C0, 0x27EF, //Miscellaneous Mathematical Symbols-A, 48, 48, Common
@@ -325,16 +325,16 @@ static final int[] unicodeBlocks = {
 // Here we specify particular individual Unicodes to be included (appended at end of selected range)
 static final int[] specificUnicodes = {
      //℃ 
-     // 0x2103,
+     0x2103,
      //电压流功率输出
      // 0x7535,0x538b,0x6d41,0x529f,0x7387,0x8f93,0x51fa,
      // 当前设定温度
      // 0x5f53,0x524d,0x8bbe,0x5b9a,0x6e29,0x5ea6,
 
      //32 恒      温      模      式
-      0x6052, 0x6e29, 0x6a21, 0x5f0f,
+     0x6052, 0x6e29, 0x6a21, 0x5f0f,
      //32 回      流      焊
-      0x56de, 0x6d41, 0x710a, 
+     0x56de, 0x6d41, 0x710a, 
      //状      态
      // 0x72b6, 0x6001,
      //待机 预热 升 /温 /回/流 降/温
@@ -342,9 +342,9 @@ static final int[] specificUnicodes = {
      //错误
      // 0x9519, 0x8bef,
      //32 参数 系统 设置
-      0x53c2, 0x6570, 0x0020, 0x7cfb, 0x7edf, 0x0020, 0x8bbe, 0x7f6e,
-     // ＞
-     0xff1e,
+     0x53c2, 0x6570, 0x0020, 0x7cfb, 0x7edf, 0x0020, 0x8bbe, 0x7f6e,
+     // 加热板必须小于
+     0x52a0, 0x70ed, 0x677f, 0x5fc5, 0x987b, 0x5c0f, 0x4e8e,
      
      
      //48 菜单

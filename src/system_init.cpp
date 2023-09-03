@@ -173,3 +173,20 @@ void update_pwm_out(float duty)
 	}
 }
 
+void EEPROM_init(void)
+{
+	Serial.println("\r\n EEPROM_init \r\n");
+
+	if (!EEPROM.begin(EEPROM_SIZE)) {
+		Serial.printf("failed to initialise EEPROM \r\n");
+	}
+
+	/* only for test */
+	// Serial.println(" bytes read from Flash . Values are:");
+	// for (int i = 0; i < EEPROM_SIZE; i++) {
+	// 	EEPROM.write(i, i);
+	// 	Serial.printf(byte(EEPROM.read(i))); Serial.print(" ");
+	// }
+}
+
+

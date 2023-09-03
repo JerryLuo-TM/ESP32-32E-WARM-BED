@@ -61,6 +61,8 @@ void setup()
 
 	st7789_init();
 
+	EEPROM_init();
+
 	/* pid */
 	myPID.SetMode(AUTOMATIC); 	//turn the PID on
 
@@ -345,6 +347,9 @@ void gui_reflow_solder_mode_refresh(void)
 	static uint32_t one_sec_count = 0;		// 周期串口打印计数值
 	static unsigned long split_time = 0; 	// 阶段运行时间
 	int64_t post_x, post_y;					// 描点坐标
+	/* 错误提示 */
+	static bool error_flag = false;
+	static unsigned long error_time = 0;
 	/* 编码器按键处理 */
 	static bool long_press_flag = false;
 	static unsigned long key_press_timestamp;
@@ -362,21 +367,41 @@ void gui_reflow_solder_mode_refresh(void)
 			gui_page_current = 0;
 			main_page_need_init = true;
 			g_solder_is_running = false;
+			system_info.pwm_precent = 0;
 			return;
 		}
 	} else if (button_status == BUT_RELEASED) {
 		/* 短按启动 */
-		if ((g_solder_is_running == false) && (system_info.holt_mode == HOT_MODE_STANDBY) && (system_info.temputer < 50.0)) {
-			system_info.holt_mode = HOT_MODE_PRE_HEAT;
-			system_info.target_temputer = system_info.temputer;
-			solder_parameter[system_info.holt_mode].timer_start = millis();
-			g_solder_timer_start = millis();
-			g_solder_is_running = true;
-			tft.fillRect(0, 50, 240, 120, TFT_BLACK);
-		} 
-		//TODO: 增加无法启动提示
+		if ((g_solder_is_running == false) && (system_info.holt_mode == HOT_MODE_STANDBY)) {
+			if (system_info.temputer < 50.0) {
+				/* 温度低于50度可以启动 */
+				system_info.holt_mode = HOT_MODE_PRE_HEAT;
+				system_info.target_temputer = system_info.temputer;
+				solder_parameter[system_info.holt_mode].timer_start = millis();
+				g_solder_timer_start = millis();
+				g_solder_is_running = true;
+				tft.fillRect(0, 50, 240, 120, TFT_BLACK);
+			} else if (error_flag == false) {
+				/* 加热板温度过高, 禁止启动 */
+				error_flag = true;
+				error_time = millis();
+				/* 错误 提示 */
+				tft.setTextDatum(MC_DATUM);
+				tft.loadFont(hwkt_32);
+				tft.setTextColor(TFT_MAGENTA, TFT_BLACK, true);
+				tft.setCursor(72, 70); tft.println("加热板");	// 32 * 3 = 96 - 240 = 144 / 2 = 72 
+				tft.setCursor(24, 110);tft.println("必须小于50℃"); //32 * 6 = 192 - 240  = 48
+				tft.unloadFont();
+			}
+		}
 	} else {
 		long_press_flag = false;
+	}
+
+	/* 清除错误 */
+	if ((error_flag == true) && (millis() - error_time) > 3000) {
+		tft.fillRect(0, 50, 240, 120, TFT_BLACK);
+		error_flag = false;
 	}
 
 	/* 回流焊过程 */

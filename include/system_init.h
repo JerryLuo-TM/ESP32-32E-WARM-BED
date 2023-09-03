@@ -5,6 +5,7 @@
 #include "Arduino.h"
 #include <stdio.h>
 
+#include "EEPROM.h"
 
 #include "max6675.h"
 #include "AiEsp32RotaryEncoder.h"
@@ -38,6 +39,8 @@
 
 /* system parameter */
 #define LONG_PRESS_RETURN_TIME      1200
+
+#define EEPROM_SIZE                 1024
 
 /* weld reflow soldering mode */
 typedef enum {
@@ -98,6 +101,7 @@ void max6675_init(void);
 void encoder_init(void);
 void ina226_init(void);
 void st7789_init(void);
+void EEPROM_init();
 
 bool update_encoder_value(void);
 ButtonState update_button_status(void);
