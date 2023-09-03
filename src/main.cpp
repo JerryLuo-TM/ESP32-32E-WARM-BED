@@ -36,6 +36,14 @@ solder_parameter_t solder_parameter[HOT_MODE_MAX] = {
 bool g_solder_is_running = false;
 unsigned long g_solder_timer_start, g_solder_time;
 
+/* PID */
+//Define Variables we'll be connecting to
+double Setpoint = 0, Input, Output;
+
+//Specify the links and initial tuning parameters
+double Kp = 4.5, Ki = 0.000, Kd = 0.5;
+PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
+
 /* 系统初始化 */
 void setup()
 {
@@ -52,6 +60,9 @@ void setup()
 	ina226_init();
 
 	st7789_init();
+
+	/* pid */
+	myPID.SetMode(AUTOMATIC); 	//turn the PID on
 
 	/* START TASK SCHEDULE */
 	runner.init();
@@ -100,15 +111,12 @@ void gui_thermost_mode_init(void)
 void gui_thermost_mode_refresh(void)
 {
 	/* PID 参数 */
-	static double Kp = 2.5, Kd = 0.5;
-	static double last_value = 0, value = 0;
-	static double Output_Heat = 0;
-	static double dt = 0.02;
+	double Output_Heat = 0;
 	/* 界面参数 */
 	char buf[50];
 	static bool long_press_flag = false;
 	static unsigned long key_press_timestamp;
-
+	static uint32_t one_sec_count = 0; // 周期串口打印计数值
 	ButtonState button_status;
 	button_status = update_button_status();
 	//Serial.printf("[Encoder Key] value: %d \r\n", status);
@@ -155,12 +163,13 @@ void gui_thermost_mode_refresh(void)
 	}
 
 	/* 温控部分 PID */
-	value = (double)system_info.target_temputer - (double)system_info.temputer;
-	Output_Heat = Kp * value + Kd * (value - last_value);
+	Input = (double)system_info.temputer;
+	Setpoint = (double)system_info.target_temputer;
+	myPID.Compute();
+	Output_Heat = Output;
 	if (Output_Heat > 100.0f) { Output_Heat = 100.0f; }
 	if (Output_Heat < 0.0f) { Output_Heat = 0.0f; }
-	system_info.pwm_precent = (int32_t)Output_Heat;
-	last_value = value;
+	system_info.pwm_precent = Output_Heat;
 
 	/* 当前温度 */
 	if (last_system_info.temputer != system_info.temputer) {
@@ -280,6 +289,11 @@ void gui_thermost_mode_refresh(void)
 		tft.unloadFont();
 	}
 
+	/* 打印状态 */
+	if (((one_sec_count++ % 50) == 0) && (system_info.holt_mode != HOT_MODE_STANDBY)) {
+		Serial.printf("PID origin_out:%f  pwm_out:%f \r\n", Output, Output_Heat);
+	}
+
 	memcpy(&last_system_info, &system_info, sizeof(system_info_t));
 }
 
@@ -325,10 +339,7 @@ void gui_reflow_solder_mode_init(void)
 void gui_reflow_solder_mode_refresh(void)
 {
 	/* PID 参数 */
-	static double Kp = 7.5, Kd = 2.0;
-	static double last_value = 0, value = 0;
 	static double Output_Heat = 0;
-	static double dt = 0.02;
 	/* 必须参数 */
 	char str_buffer[50];
 	static uint32_t one_sec_count = 0;		// 周期串口打印计数值
@@ -362,7 +373,8 @@ void gui_reflow_solder_mode_refresh(void)
 			g_solder_timer_start = millis();
 			g_solder_is_running = true;
 			tft.fillRect(0, 50, 240, 120, TFT_BLACK);
-		}
+		} 
+		//TODO: 增加无法启动提示
 	} else {
 		long_press_flag = false;
 	}
@@ -400,12 +412,13 @@ void gui_reflow_solder_mode_refresh(void)
 	}
 
 	/* 系统误差 */
-	value = (double)system_info.target_temputer -  (double)system_info.temputer;
-	Output_Heat = Kp * value + Kd * (value - last_value);
-	if (Output_Heat > 100) {Output_Heat = 100;}
-	if (Output_Heat < 0.0) {Output_Heat = 0.001;}
-	system_info.pwm_precent = (int32_t)Output_Heat;
-	last_value = value;
+	Input = (double)system_info.temputer;
+	Setpoint = (double)system_info.target_temputer;
+	myPID.Compute();
+	Output_Heat = Output;
+	if (Output_Heat > 100.0f) { Output_Heat = 100.0f; }
+	if (Output_Heat < 0.0f) { Output_Heat = 0.0f; }
+	system_info.pwm_precent = Output_Heat;
 
 	/* 温度曲线 */
 	if (g_solder_is_running == true) {
@@ -516,11 +529,11 @@ void gui_reflow_solder_mode_refresh(void)
 
 	/* 打印状态 */
 	if (((one_sec_count++ % 50) == 0) && (system_info.holt_mode != HOT_MODE_STANDBY)) {
-		Serial.printf("x: %d  y: %d diff:%f pwm_pre:%f \r\n", post_x, post_y, value, system_info.pwm_precent);
-		Serial.printf("solder_mode[%d] solder_time[%d] target_temp[%f] \r\n",
-																		system_info.holt_mode,
-																		g_solder_time,
-																		system_info.target_temputer);
+		Serial.printf("------ 回流焊模式 ------\r\n");
+		Serial.printf("[SOLDER] x: %d  y: %d \r\n", post_x, post_y);
+		Serial.printf("[SOLDER] solder_mode[%d] solder_time[%d] target_temp[%f] \r\n", system_info.holt_mode, g_solder_time, system_info.target_temputer);
+		Serial.printf("[SOLDER] PID origin_out:%f  pwm_out:%f \r\n", Output, Output_Heat);
+		Serial.printf("\r\n");
 	}
 
 	memcpy(&last_system_info, &system_info, sizeof(system_info_t));

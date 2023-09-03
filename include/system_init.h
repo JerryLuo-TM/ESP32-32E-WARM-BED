@@ -17,6 +17,8 @@
 
 #include <ESP32Servo.h>
 
+#include <PID_v1.h>
+
 /* PWM GPIO PIN */
 #define PWM_PIN                     27
 
