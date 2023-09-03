@@ -109,24 +109,27 @@ void gui_thermost_mode_refresh(void)
 	static bool long_press_flag = false;
 	static unsigned long key_press_timestamp;
 
-	/* 长按退出 */
-	if (encoder_key_is_down() == true) {
-		if (long_press_flag == false) {
-			key_press_timestamp = millis();
-		} else {
-			if ((millis() - key_press_timestamp) >= LONG_PRESS_TIMEOUT) {
-				gui_page_select = 0;
-				gui_page_current = 0;
-				main_page_need_init = true;
-				update_pwm_out(0);
-				return;
-			}
-		}
+	ButtonState button_status;
+	button_status = update_button_status();
+	//Serial.printf("[Encoder Key] value: %d \r\n", status);
+
+	/* 旋转编码器 按钮 处理 */
+	if ((button_status == BUT_PUSHED) && (long_press_flag == false)) {
 		long_press_flag = true;
-	} else {
-		update_encoder_key();
-		long_press_flag = false;
 		key_press_timestamp = millis();
+	} else if ((button_status == BUT_DOWN) && (long_press_flag == true)) {
+		if ((millis() - key_press_timestamp) > 1200) {
+			/* 长按退出 */
+			gui_page_select = 0;
+			gui_page_current = 0;
+			main_page_need_init = true;		// 刷新主页
+			system_info.pwm_precent = 0;	// 关停输出
+			return;
+		}
+	}  else if (button_status == BUT_RELEASED) {
+		/* 短按 */
+	} else {
+		long_press_flag = false;
 	}
 
 	/* 温控部分 PID */
@@ -299,33 +302,27 @@ void gui_reflow_solder_mode_refresh(void)
 	static uint32_t one_sec_count = 0;		// 周期串口打印计数值
 	static unsigned long split_time = 0; 	// 阶段运行时间
 	int64_t post_x, post_y;					// 描点坐标
-
+	/* 编码器按键处理 */
 	static bool long_press_flag = false;
 	static unsigned long key_press_timestamp;
+	ButtonState button_status;
+	button_status = update_button_status();
 
-	/* 长按退出 */
-	/* 旋转编码器 状态 处理 */
-	if (encoder_key_is_down() == true) {
-		if (long_press_flag == false) {
-			key_press_timestamp = millis();
-		} else {
-			if ((millis() - key_press_timestamp) >= 1600) {
-				gui_page_select = 0;
-				gui_page_current = 0;
-				system_info.target_temputer = 25;
-				main_page_need_init = true;
-				g_solder_is_running = false;
-				return;
-			}
-		}
+	/* 旋转编码器 按钮 处理 */
+	if ((button_status == BUT_PUSHED) && (long_press_flag == false)) {
 		long_press_flag = true;
-	} else {
-		long_press_flag = false;
 		key_press_timestamp = millis();
-	}
-
-	/* 旋转编码器 按键 处理 */
-	if (update_encoder_key() == true) {
+	} else if ((button_status == BUT_DOWN) && (long_press_flag == true)) {
+		if ((millis() - key_press_timestamp) > 1200) {
+			/* 长按退出 */
+			gui_page_select = 0;
+			gui_page_current = 0;
+			main_page_need_init = true;
+			g_solder_is_running = false;
+			return;
+		}
+	} else if (button_status == BUT_RELEASED) {
+		/* 短按启动 */
 		if ((g_solder_is_running == false) && (system_info.holt_mode == HOT_MODE_STANDBY) && (system_info.temputer < 50.0)) {
 			system_info.holt_mode = HOT_MODE_PRE_HEAT;
 			system_info.target_temputer = system_info.temputer;
@@ -334,6 +331,8 @@ void gui_reflow_solder_mode_refresh(void)
 			g_solder_is_running = true;
 			tft.fillRect(0, 50, 240, 120, TFT_BLACK);
 		}
+	} else {
+		long_press_flag = false;
 	}
 
 	/* 回流焊过程 */
@@ -512,30 +511,28 @@ void gui_main_select_page()
 {
 	static uint32_t last_point_page_number = (GUI_MAX_INDEX - 1);
 	static uint32_t point_page_number = GUI_MIN_INDEX;
-
-	static bool first_press_flag = false;
+	/* 编码器按键临时变量 */
+	static bool press_flag = false;
 	static unsigned long key_press_timestamp;
+	ButtonState button_status;
 
+	/* 记录页面 */
 	last_system_info.encoder = system_info.encoder;
 	last_point_page_number = point_page_number;
 
-	/* 旋转编码器 按钮 处理 */
-	if (update_encoder_key() == true) {
-		if (first_press_flag == false) {
-			key_press_timestamp = millis();
-		} else {
-			if ((millis() - key_press_timestamp) <= 1200) {
-				gui_page_select = point_page_number;
-			}
-		}
-		first_press_flag = true;
-	}
+	/* 更新按键状态 */
+	button_status = update_button_status();
 
-	if ((millis() - key_press_timestamp) >= 2500) {
-		first_press_flag = false;
+	/* 旋转编码器 按钮 处理 */
+	if ((button_status == BUT_PUSHED) && (press_flag == false)) {
+		press_flag = true;
+	} else if ((button_status == BUT_RELEASED) && (press_flag == true)) {
+		press_flag = false;
+		gui_page_select = point_page_number;
 	}
 
 	/* 旋转编码器 旋钮 处理 */
+	update_encoder_value();
 	if (last_system_info.encoder != system_info.encoder) {
 		if ((last_system_info.encoder == 0) && (system_info.encoder == 1000)) {
 			// nothing

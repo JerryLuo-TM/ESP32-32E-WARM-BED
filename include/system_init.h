@@ -18,7 +18,7 @@
 #include <ESP32Servo.h>
 
 /* PWM GPIO PIN */
-#define PWM_PIN 27
+#define PWM_PIN                     27
 
 /* EC Rotary encoder */
 #define ROTARY_ENCODER_A_PIN        33
@@ -97,8 +97,8 @@ void encoder_init(void);
 void ina226_init(void);
 void st7789_init(void);
 
-bool update_encoder_key(void);
-bool encoder_key_is_down(void);
+bool update_encoder_value(void);
+ButtonState update_button_status(void);
 
 void update_power_sensor(void);
 void update_temputer_sensor(void);

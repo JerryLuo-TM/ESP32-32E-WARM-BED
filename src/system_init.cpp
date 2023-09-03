@@ -111,36 +111,43 @@ void st7789_init(void)
 	tft.drawCentreString("THERM MODE", 120, 4, 4);
 }
 
-/* 0: nothing 1: pressup*/
-bool update_encoder_key(void)
+/*
+	0: not active
+	1: avtive 
+*/
+bool update_encoder_value(void)
 {
-	static unsigned long lastTimePressed = 0;
-
 	if (rotaryEncoder.encoderChanged()) {
 		system_info.encoder = rotaryEncoder.readEncoder();
-		Serial.printf("[Encoder] last Value:%d  Value:%d \r\n", last_system_info.encoder, system_info.encoder);
-	}
-
-	if (rotaryEncoder.isEncoderButtonClicked()) {
-		if (millis() - lastTimePressed < 500) {
-            return false;
-        }
-        //Serial.print("button pressed \r\n");
+		Serial.printf("[Encoder Value] last_Value:%d  Now_Value:%d \r\n", 
+								last_system_info.encoder, system_info.encoder);
 		return true;
 	}
 
 	return false;
 }
 
-bool encoder_key_is_down(void)
+ButtonState update_button_status(void)
 {
-	if (rotaryEncoder.isEncoderButtonDown()) {
-		return true;
+	ButtonState status;
+	static bool previous_butt_state = false;
+	uint8_t butt_state = rotaryEncoder.isEncoderButtonDown();
+
+	if (butt_state && !previous_butt_state) {
+		previous_butt_state = true;
+		// Serial.printf("[Encoder Key] %d Button Pushed \r\n", status);
+		status = BUT_PUSHED;
+	} else if (!butt_state && previous_butt_state) {
+		previous_butt_state = false;
+		// Serial.printf("[Encoder Key] %d Button Released \r\n", status);
+		status = BUT_RELEASED;
+	} else {
+		status = (butt_state ? BUT_DOWN : BUT_UP);
+		// Serial.printf("[Encoder Key] %d %s \r\n", status, (butt_state ? "BUT_DOWN" : "BUT_UP"));
 	}
 
-	return false;
+	return status; 
 }
-
 
 void update_temputer_sensor(void)
 {
