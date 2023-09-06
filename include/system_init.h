@@ -109,6 +109,7 @@ ButtonState update_button_status(void);
 void update_power_sensor(void);
 void update_temputer_sensor(void);
 void update_pwm_out(float duty);
+void update_pwm_fan_out(float duty);
 
 #endif
 

@@ -7,6 +7,7 @@ int8_t thermoCS = 16;
 int8_t thermoCLK = 4;
 
 ESP32PWM pwm;
+ESP32PWM pwm_fan;
 INA226 ina(Wire);
 TFT_eSPI tft = TFT_eSPI(); // Invoke custom library
 MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
@@ -51,6 +52,11 @@ void pwm_init(void)
 {
 	// pinMode(PWM_PIN, OUTPUT);
 	pwm.attachPin(PWM_PIN, 20000, 10); // 2KHz 8 bit
+	pwm.writeScaled(0.0f);
+
+	/* 风扇 */
+	pwm_fan.attachPin(14, 20000, 10); // 2KHz 8 bit
+	pwm_fan.writeScaled(0.0f);
 }
 
 
@@ -170,6 +176,17 @@ void update_pwm_out(float duty)
 		pwm.writeScaled(1.0f);
 	} else {
 		pwm.writeScaled(duty);
+	}
+}
+
+void update_pwm_fan_out(float duty)
+{
+	if (duty < 0.0) {
+		pwm_fan.writeScaled(0.0f);
+	} else if (duty > 1.0) {
+		pwm_fan.writeScaled(1.0f);
+	} else {
+		pwm_fan.writeScaled(duty);
 	}
 }
 

@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <TaskScheduler.h>
 #include "system_init.h"
+#include "Kalman.h"
 
 #include "font/hwkt_hz24.h"
 #include "font/hwkt_hz32.h"
@@ -41,7 +42,7 @@ unsigned long g_solder_timer_start, g_solder_time;
 double Setpoint = 0, Input, Output;
 
 //Specify the links and initial tuning parameters
-double Kp = 4.5, Ki = 0.000, Kd = 0.5;
+double Kp = 10.0, Ki = 0.001, Kd = 50.0;
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
 /* 系统初始化 */
@@ -165,12 +166,13 @@ void gui_thermost_mode_refresh(void)
 	}
 
 	/* 温控部分 PID */
+	//一阶卡尔曼对原始温度数据处理 抑制噪声
+	system_info.temputer = KalmanFilter((double)system_info.temputer);
 	Input = (double)system_info.temputer;
 	Setpoint = (double)system_info.target_temputer;
+	myPID.SetTunings(Kp, Ki, Kd);
 	myPID.Compute();
 	Output_Heat = Output;
-	if (Output_Heat > 100.0f) { Output_Heat = 100.0f; }
-	if (Output_Heat < 0.0f) { Output_Heat = 0.0f; }
 	system_info.pwm_precent = Output_Heat;
 
 	/* 当前温度 */
@@ -268,22 +270,27 @@ void gui_thermost_mode_refresh(void)
 
 	/* 百分比 */
 	if (last_system_info.pwm_precent != system_info.pwm_precent) {
+		float pwm_precent;
+		pwm_precent = system_info.pwm_precent;
+		if (pwm_precent < 0.0f) {
+			pwm_precent = 0.0 - pwm_precent;
+		}
 		tft.setTextColor(TFT_RED, TFT_BLACK, true);
 		tft.setTextDatum(TR_DATUM);/* 右上 */
 		tft.loadFont(fzchsjt_24);
 		sprintf(&buf[0], " ");
-		if ((int32_t)system_info.pwm_precent > 99) {
+		if ((int32_t)pwm_precent > 99) {
 			sprintf(&buf[1], "1");
 			sprintf(&buf[2], "0");
 			sprintf(&buf[3], "0");
-		} else if ((int32_t)system_info.pwm_precent > 9) {
+		} else if ((int32_t)pwm_precent > 9) {
 			sprintf(&buf[1], " ");
-			sprintf(&buf[2], "%01d", (int32_t)system_info.pwm_precent / 10 % 10);
-			sprintf(&buf[3], "%01d", (int32_t)system_info.pwm_precent % 10);
+			sprintf(&buf[2], "%01d", (int32_t)pwm_precent / 10 % 10);
+			sprintf(&buf[3], "%01d", (int32_t)pwm_precent % 10);
 		} else {
 			sprintf(&buf[1], " ");
 			sprintf(&buf[2], " ");
-			sprintf(&buf[3], "%01d", (int32_t)system_info.pwm_precent % 10);
+			sprintf(&buf[3], "%01d", (int32_t)pwm_precent % 10);
 		}
 		buf[4] = '%';
 		buf[5] = '\0';
@@ -292,8 +299,11 @@ void gui_thermost_mode_refresh(void)
 	}
 
 	/* 打印状态 */
-	if (((one_sec_count++ % 50) == 0) && (system_info.holt_mode != HOT_MODE_STANDBY)) {
-		Serial.printf("PID origin_out:%f  pwm_out:%f \r\n", Output, Output_Heat);
+	if (((one_sec_count++ % 50) == 0)) {
+		Serial.printf("\r\n");
+		Serial.printf("PID current temputer:%f target temputer:%f \r\n", (double)system_info.temputer, (double)system_info.target_temputer);
+		Serial.printf("PID origin_out:%f pwm_out:%f pwm_valu:%f \r\n", Output, Output_Heat, system_info.pwm_precent);
+		Serial.printf("PID Kp:%f Ki:%f Kd:%f \r\n", myPID.GetKp(), myPID.GetKi(), myPID.GetKd());
 	}
 
 	memcpy(&last_system_info, &system_info, sizeof(system_info_t));
@@ -441,8 +451,6 @@ void gui_reflow_solder_mode_refresh(void)
 	Setpoint = (double)system_info.target_temputer;
 	myPID.Compute();
 	Output_Heat = Output;
-	if (Output_Heat > 100.0f) { Output_Heat = 100.0f; }
-	if (Output_Heat < 0.0f) { Output_Heat = 0.0f; }
 	system_info.pwm_precent = Output_Heat;
 
 	/* 温度曲线 */
@@ -570,8 +578,9 @@ void Task_Data_Callback()
 	static uint32_t count = 0;
 
 	/* MAX6675 data rate 250ms */
-	if (((count++) % 4) == 0) {
+	if (((count++) % 2) == 0) {
 		update_temputer_sensor();
+		//Serial.printf("timestamp: %d temputer: %f error:%d  \r\n", millis(), system_info.temputer, error_count);
 	}
 
 	update_power_sensor();
@@ -700,7 +709,16 @@ void Task_GUI_Callback()
 	}
 
 	/* 0.0 - 1.0 */
-	update_pwm_out(system_info.pwm_precent / 100.0f);
+	if (system_info.pwm_precent > 0.0f) {
+		update_pwm_out(system_info.pwm_precent / 100.0f);
+		update_pwm_fan_out(0.0f);
+	} else if (system_info.pwm_precent < 0.0f) {
+		update_pwm_out(0.0f);
+		update_pwm_fan_out(((0.0f - system_info.pwm_precent) / 100.0f));
+	} else {
+		update_pwm_out(0.0f);
+		update_pwm_fan_out(0.0f);
+	}
 }
 
 
